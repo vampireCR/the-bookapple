@@ -29,6 +29,8 @@ body.dark {
   --muted: #b9aab0;
 }
 
+/* HEADER */
+
 .topbar {
   height: 68px;
   background: var(--wine);
@@ -57,6 +59,8 @@ body.dark {
   font-size: 13px;
 }
 
+/* MAIN LAYOUT */
+
 .shell {
   max-width: 1320px;
   margin: 24px auto;
@@ -84,6 +88,8 @@ body.dark {
   padding: 18px;
 }
 
+/* PROFILE */
+
 .profile-mini {
   text-align: center;
   padding-bottom: 16px;
@@ -109,6 +115,8 @@ body.dark {
   position: relative;
 }
 
+/* TEXT */
+
 h1,
 h2,
 h3 {
@@ -131,6 +139,8 @@ h3 {
   font-size: 11px;
 }
 
+/* NAVIGATION */
+
 .nav {
   padding: 6px;
 }
@@ -145,6 +155,7 @@ h3 {
   border: 0;
   border-bottom: 1px solid var(--line);
   cursor: pointer;
+  transition: 0.15s;
 }
 
 .nav-btn:hover,
@@ -153,6 +164,8 @@ h3 {
   color: var(--wine);
   font-weight: bold;
 }
+
+/* HERO */
 
 .hero {
   background: linear-gradient(120deg, var(--wine2), #91364e);
@@ -165,6 +178,8 @@ h3 {
 .hero h1 {
   margin-bottom: 8px;
 }
+
+/* INPUTS */
 
 textarea,
 input,
@@ -183,12 +198,22 @@ textarea {
   resize: vertical;
 }
 
+textarea:focus,
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--wine);
+}
+
+/* BUTTONS */
+
 .primary,
 .secondary {
   border: 0;
   border-radius: 4px;
   padding: 10px 15px;
   cursor: pointer;
+  transition: 0.15s;
 }
 
 .primary {
@@ -224,6 +249,8 @@ label {
   display: block;
 }
 
+/* POSTS */
+
 .post {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -249,6 +276,8 @@ label {
   overflow-wrap: anywhere;
   line-height: 1.5;
 }
+
+/* PEOPLE AND FRIENDS */
 
 .result-row {
   display: flex;
@@ -281,6 +310,8 @@ label {
   padding: 8px 0;
   cursor: pointer;
 }
+
+/* AUTHORIZATION */
 
 .auth-card {
   max-width: 430px;
@@ -339,22 +370,9 @@ label {
   min-height: 22px;
 }
 
-footer {
-  text-align: center;
-  color: var(--muted);
-  padding: 25px;
-  font-size: 11px;
-}
-
-hr {
-  border: 0;
-  border-top: 1px solid var(--line);
-  margin: 20px 0;
-}
-
-/* ==============================
+/* =================================
    PRIVATE MESSAGES
-============================== */
+================================= */
 
 .messages-layout {
   display: grid;
@@ -362,6 +380,8 @@ hr {
   gap: 15px;
   min-height: 430px;
 }
+
+/* CONTACTS */
 
 .messages-contacts {
   border-right: 1px solid var(--line);
@@ -385,6 +405,7 @@ hr {
   text-align: left;
   cursor: pointer;
   border-radius: 4px;
+  transition: 0.15s;
 }
 
 .chat-contact:hover,
@@ -405,6 +426,8 @@ hr {
   font-weight: bold;
 }
 
+/* CHAT WINDOW */
+
 .chat-panel {
   min-width: 0;
   display: flex;
@@ -412,6 +435,7 @@ hr {
   border: 1px solid var(--line);
   border-radius: 5px;
   overflow: hidden;
+  background: var(--paper);
 }
 
 .chat-header {
@@ -421,6 +445,8 @@ hr {
   border-bottom: 1px solid var(--line);
 }
 
+/* CHAT HISTORY */
+
 .chat-history {
   height: 330px;
   overflow-y: auto;
@@ -428,6 +454,7 @@ hr {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  scroll-behavior: smooth;
 }
 
 .chat-message {
@@ -444,10 +471,12 @@ hr {
   align-self: flex-end;
   background: var(--wine);
   color: white;
+  border-bottom-right-radius: 2px;
 }
 
 .chat-message.theirs {
   align-self: flex-start;
+  border-bottom-left-radius: 2px;
 }
 
 .chat-time {
@@ -457,22 +486,50 @@ hr {
   opacity: 0.7;
 }
 
+/* MESSAGE FORM */
+
 .message-form {
   display: flex;
   gap: 8px;
   padding: 12px;
   border-top: 1px solid var(--line);
+  align-items: flex-end;
 }
 
-.message-form input {
+.message-form input,
+.message-form textarea {
   flex: 1;
   min-width: 0;
   margin: 0;
+  min-height: 44px;
+  max-height: 120px;
+}
+
+.message-form textarea {
+  resize: vertical;
 }
 
 .message-form button {
   flex-shrink: 0;
+  min-height: 44px;
 }
+
+/* FOOTER */
+
+footer {
+  text-align: center;
+  color: var(--muted);
+  padding: 25px;
+  font-size: 11px;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 20px 0;
+}
+
+/* RESPONSIVE */
 
 @media(max-width: 950px) {
   .layout {
@@ -509,5 +566,13 @@ hr {
 
   .message-form button {
     width: 100%;
+  }
+
+  .chat-message {
+    max-width: 90%;
+  }
+
+  .shell {
+    margin-top: 12px;
   }
 }
