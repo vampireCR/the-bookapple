@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>TheAppleBook</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">The<span>Apple</span>Book</div>
+    <div id="topUser" class="top-user"></div>
+  </header>
+
+  <main class="shell">
+    <section id="authView" class="auth-card">
+      <div class="auth-brand">🍎 TheAppleBook</div>
+      <h1>Добро пожаловать</h1>
+      <p class="muted">Старая атмосфера. Новые возможности.</p>
+      <div class="tabs">
+        <button class="tab active" data-tab="login">Войти</button>
+        <button class="tab" data-tab="signup">Регистрация</button>
+      </div>
+      <form id="loginForm">
+        <label>Email<input id="loginEmail" type="email" required autocomplete="email"></label>
+        <label>Пароль<input id="loginPassword" type="password" required autocomplete="current-password"></label>
+        <button class="primary wide">Войти</button>
+      </form>
+      <form id="signupForm" class="hidden">
+        <label>Имя пользователя<input id="signupName" maxlength="32" required placeholder="Например, Alex"></label>
+        <label>Email<input id="signupEmail" type="email" required autocomplete="email"></label>
+        <label>Пароль<input id="signupPassword" type="password" minlength="8" required autocomplete="new-password"></label>
+        <button class="primary wide">Создать аккаунт</button>
+        <p class="tiny muted">После регистрации может потребоваться подтверждение email.</p>
+      </form>
+      <p id="authMessage" class="notice" aria-live="polite"></p>
+    </section>
+
+    <section id="appView" class="hidden">
+      <div class="layout">
+        <aside class="sidebar">
+          <div class="panel profile-mini">
+            <div class="cover"></div>
+            <div class="avatar" id="myAvatar">?</div>
+            <h2 id="myName">Пользователь</h2>
+            <div id="myRole"></div>
+            <p id="myStatus" class="muted"></p>
+          </div>
+          <nav class="panel nav">
+            <button data-page="feed" class="nav-btn active">🏠 Лента</button>
+            <button data-page="people" class="nav-btn">🔎 Поиск людей</button>
+            <button data-page="friends" class="nav-btn">👥 Друзья</button>
+            <button data-page="profile" class="nav-btn">👤 Мой профиль</button>
+            <button data-page="admin" id="adminNav" class="nav-btn hidden">👑 Управление</button>
+            <button data-page="settings" class="nav-btn">⚙ Настройки</button>
+            <button id="logoutBtn" class="nav-btn">↪ Выйти</button>
+          </nav>
+        </aside>
+
+        <section class="maincol">
+          <section class="page" id="page-feed">
+            <div class="hero">
+              <h1>Твоя сеть. Твои люди.</h1>
+              <p>TheAppleBook — место для общения и новых знакомств.</p>
+            </div>
+            <div class="panel pad">
+              <h2>Создать публикацию</h2>
+              <form id="postForm">
+                <textarea id="postText" maxlength="2000" rows="3" placeholder="О чём думаешь?" required></textarea>
+                <button class="primary">Опубликовать</button>
+              </form>
+            </div>
+            <div id="feedList"></div>
+          </section>
+
+          <section class="page hidden" id="page-people">
+            <div class="panel pad">
+              <h2>Поиск пользователей</h2>
+              <input id="peopleSearch" placeholder="Введи имя пользователя">
+              <div id="peopleResults" class="results"></div>
+            </div>
+          </section>
+
+          <section class="page hidden" id="page-friends">
+            <div class="panel pad">
+              <h2>Заявки в друзья</h2>
+              <div id="incomingRequests"></div>
+            </div>
+            <div class="panel pad">
+              <h2>Мои друзья</h2>
+              <div id="friendsList"></div>
+            </div>
+          </section>
+
+          <section class="page hidden" id="page-profile">
+            <div class="panel pad">
+              <h2>Мой профиль</h2>
+              <div id="profileDetails"></div>
+            </div>
+          </section>
+
+          <section class="page hidden" id="page-admin">
+            <div class="panel pad">
+              <h2>Administration Center</h2>
+              <p class="muted">Назначай роли только людям, которым действительно доверяешь.</p>
+              <div id="adminContent"></div>
+            </div>
+          </section>
+
+          <section class="page hidden" id="page-settings">
+            <div class="panel pad">
+              <h2>Настройки профиля</h2>
+              <form id="profileForm">
+                <label>Имя пользователя<input id="editName" maxlength="32" required></label>
+                <label>Статус
+                  <select id="editStatus">
+                    <option value="">Не указано</option>
+                    <option value="Интересуюсь">Интересуюсь</option>
+                    <option value="Свободен/свободна">Свободен/свободна</option>
+                    <option value="В отношениях">В отношениях</option>
+                  </select>
+                </label>
+                <label>О себе<textarea id="editBio" maxlength="240" rows="3"></textarea></label>
+                <button class="primary">Сохранить профиль</button>
+              </form>
+              <hr>
+              <h3>Внешний вид</h3>
+              <label>Тема
+                <select id="themeSelect">
+                  <option value="burgundy">Бордовая классика</option>
+                  <option value="dark">Тёмная</option>
+                </select>
+              </label>
+              <button id="saveTheme" class="secondary">Сохранить тему</button>
+            </div>
+          </section>
+        </section>
+
+        <aside class="rightcol">
+          <div class="panel pad">
+            <h3>О TheAppleBook</h3>
+            <p class="muted">Основан 22 ноября 2026</p>
+            <p>Владелец проекта: <strong>Viktor Serbin</strong></p>
+            <p class="tiny muted">Роли и доступы проверяются базой данных.</p>
+          </div>
+          <div class="panel pad">
+            <h3>Быстрый переход</h3>
+            <button class="link-btn" data-go="people">Найти людей →</button>
+            <button class="link-btn" data-go="friends">Мои друзья →</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+    <p id="globalMessage" class="global-message" aria-live="polite"></p>
+  </main>
+
+  <footer>TheAppleBook © 2026 · Founded by Viktor Serbin</footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
