@@ -9,13 +9,31 @@ function showInstallMessage(message) {
   }
 }
 
+function isAppInstalled() {
+  return window.matchMedia("(display-mode: standalone)").matches ||
+    window.navigator.standalone === true;
+}
+
+if (isAppInstalled()) {
+  if (installButton) {
+    installButton.textContent = "Приложение установлено";
+    installButton.disabled = true;
+  }
+
+  showInstallMessage("🍎 TheAppleBook уже установлен!");
+}
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
-      await navigator.serviceWorker.register("./service-worker.js");
+      await navigator.serviceWorker.register("./service-worker.js", {
+        scope: "./"
+      });
+
       console.log("TheAppleBook: Service Worker registered.");
     } catch (error) {
       console.error("Service Worker:", error);
+      showInstallMessage("Не удалось включить офлайн-режим.");
     }
   });
 }
@@ -32,31 +50,30 @@ window.addEventListener("beforeinstallprompt", event => {
   showInstallMessage("TheAppleBook готов к установке!");
 });
 
-if (installButton) {
-  installButton.addEventListener("click", async () => {
-    if (!deferredInstallPrompt) {
-      showInstallMessage(
-        "Если установка недоступна, открой меню браузера и выбери «Установить приложение» или «Добавить на главный экран»."
-      );
-      return;
-    }
+installButton?.addEventListener("click", async () => {
+  if (!deferredInstallPrompt) {
+    showInstallMessage(
+      "Открой меню браузера и выбери «Установить приложение» или «Добавить на главный экран»."
+    );
+    return;
+  }
 
-    deferredInstallPrompt.prompt();
+  deferredInstallPrompt.prompt();
 
-    const result = await deferredInstallPrompt.userChoice;
+  const result = await deferredInstallPrompt.userChoice;
 
-    if (result.outcome === "accepted") {
-      showInstallMessage("Установка TheAppleBook запущена!");
-    } else {
-      showInstallMessage("Установка пока не выполнена.");
-    }
+  if (result.outcome === "accepted") {
+    showInstallMessage("Установка TheAppleBook запущена!");
+  } else {
+    showInstallMessage("Установка отменена.");
+  }
 
-    deferredInstallPrompt = null;
-  });
-}
+  deferredInstallPrompt = null;
+});
 
 window.addEventListener("appinstalled", () => {
   showInstallMessage("🍎 TheAppleBook успешно установлен!");
+
   if (installButton) {
     installButton.textContent = "Приложение установлено";
     installButton.disabled = true;
