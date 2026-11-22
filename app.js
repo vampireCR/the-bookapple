@@ -1080,6 +1080,18 @@ async function openPublicProfile(id) {
     return;
   }
 
+  // Записываем просмотр профиля
+  const { error: viewError } = await supabase.rpc(
+    "record_profile_view",
+    {
+      target_profile_id: id
+    }
+  );
+
+  if (viewError) {
+    console.warn("Не удалось записать просмотр профиля:", viewError.message);
+  }
+
   $("publicProfileModal")?.remove();
 
   const modal = document.createElement("div");
@@ -1157,7 +1169,6 @@ async function openPublicProfile(id) {
 }
 
 // Единый обработчик для всех кнопок открытия профиля.
-// Работает и с элементами, которые создаются динамически.
 
 document.addEventListener("click", event => {
   const button = event.target.closest("[data-profile-open]");
