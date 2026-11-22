@@ -1,9 +1,9 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
-const SUPABASE_URL = "https://tzkxujrjrhyqxgzytaex.supabase.co";
-const SUPABASE_KEY = "sb_publishable_BrNnF8XCshRm1NmEYvQphg_hcNIJhQV";
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createClient(
+  "https://tzkxujrjrhyqxgzytaex.supabase.co",
+  "sb_publishable_BrNnF8XCshRm1NmEYvQphg_hcNIJhQV"
+);
 
 const $ = id => document.getElementById(id);
 
@@ -14,6 +14,7 @@ let selectedEmoji = "🍎";
 function message(text, error = false) {
   const el = $("profileSettingsMessage");
   if (!el) return;
+
   el.textContent = text;
   el.style.color = error ? "#c0392b" : "";
 }
@@ -26,6 +27,12 @@ function escapeHTML(value = "") {
     '"': "&quot;",
     "'": "&#39;"
   })[char]);
+}
+
+function notifyProfileUpdated() {
+  window.dispatchEvent(
+    new CustomEvent("theapplebook:profile-updated")
+  );
 }
 
 function setAvatar(url, emoji, username) {
@@ -41,8 +48,10 @@ function setAvatar(url, emoji, username) {
 }
 
 async function loadProfile() {
-  const { data: { user: authUser } } = await supabase.auth.getUser();
-  if (!authUser) return;
+  const { data: { user: authUser }, error: authError } =
+    await supabase.auth.getUser();
+
+  if (authError || !authUser) return;
 
   user = authUser;
 
@@ -62,13 +71,29 @@ async function loadProfile() {
 
   setAvatar(data.avatar_url, data.avatar_emoji, data.username);
 
-  $("handleInput").value = data.handle || "";
+  const handleInput = $("handleInput");
+  if (handleInput) handleInput.value = data.handle || "";
+
+  const picker = $("emojiPicker");
+
+  if (picker) {
+    picker.querySelectorAll("[data-emoji]").forEach(button => {
+      button.classList.toggle(
+        "selected",
+        button.dataset.emoji === selectedEmoji
+      );
+    });
+  }
 }
 
 async function uploadAvatar() {
-  if (!user) return;
+  if (!user || !profile) {
+    message("Сначала войди в аккаунт.", true);
+    return;
+  }
 
-  const file = $("avatarFile").files[0];
+  const input = $("avatarFile");
+  const file = input?.files?.[0];
 
   if (!file) {
     message("Сначала выбери фотографию.", true);
@@ -83,15 +108,15 @@ async function uploadAvatar() {
   }
 
   if (file.size > 3 * 1024 * 1024) {
-    message("Файл слишком большой. Максимум 3 МБ.", true);
+    message("Максимальный размер фотографии — 3 МБ.", true);
     return;
   }
 
-  const extension = file.type === "image/jpeg"
-    ? "jpg"
-    : file.type === "image/png"
-      ? "png"
-      : "webp";
+  const extension = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp"
+  }[file.type];
 
   const path = `${user.id}/${crypto.randomUUID()}.${extension}`;
 
@@ -133,11 +158,18 @@ async function uploadAvatar() {
   profile.avatar_emoji = null;
 
   setAvatar(avatarUrl, null, profile.username);
+  notifyProfileUpdated();
+
+  if (input) input.value = "";
+
   message("Аватар успешно обновлён!");
 }
 
 async function saveEmoji() {
-  if (!user) return;
+  if (!user || !profile) {
+    message("Сначала войди в аккаунт.", true);
+    return;
+  }
 
   const { error } = await supabase
     .from("profiles")
@@ -156,19 +188,29 @@ async function saveEmoji() {
   profile.avatar_url = null;
 
   setAvatar(null, selectedEmoji, profile.username);
+  notifyProfileUpdated();
+
   message("Эмодзи сохранено!");
 }
 
 async function saveHandle() {
-  if (!user) return;
+  if (!user || !profile) {
+    message("Сначала войди в аккаунт.", true);
+    return;
+  }
 
-  const handle = $("handleInput").value
+  const input = $("handleInput");
+
+  const handle = (input?.value || "")
     .trim()
     .replace(/^@/, "")
     .toLowerCase();
 
   if (!/^[a-z0-9_]{3,20}$/.test(handle)) {
-    message("Ник должен содержать 3–20 символов: латинские буквы, цифры и _.", true);
+    message(
+      "Ник должен содержать 3–20 символов: латинские буквы, цифры и _.",
+      true
+    );
     return;
   }
 
@@ -202,6 +244,8 @@ async function saveHandle() {
   }
 
   profile.handle = handle;
+  notifyProfileUpdated();
+
   message("Твой ник @" + handle + " сохранён!");
 }
 
@@ -217,14 +261,14 @@ $("emojiPicker")?.querySelectorAll("[data-emoji]").forEach(button => {
       item.classList.toggle("selected", item === button);
     });
 
-    $("avatarPreview").textContent = selectedEmoji;
-    $("avatarPreview").querySelector("img")?.remove();
+    const preview = $("avatarPreview");
+    if (preview) preview.textContent = selectedEmoji;
   });
 });
 
-supabase.auth.onAuthStateChange((event) => {
+supabase.auth.onAuthStateChange(event => {
   if (event === "SIGNED_IN") {
-    setTimeout(loadProfile, 0);
+    setTimeout(loadProfile, 100);
   }
 
   if (event === "SIGNED_OUT") {
