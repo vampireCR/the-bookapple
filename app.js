@@ -57,9 +57,6 @@ function formatTime(date) {
   });
 }
 
-// Универсальная аватарка.
-// Используется в ленте, друзьях, поиске и сообщениях.
-
 function avatarContent(profile) {
   if (profile?.avatar_url) {
     return `<img src="${esc(profile.avatar_url)}" alt="Аватар" loading="lazy">`;
@@ -77,6 +74,22 @@ function renderAvatar(profile, className = "user-avatar") {
     <div class="${className}">
       ${avatarContent(profile)}
     </div>
+  `;
+}
+
+function renderAvatarButton(profile, className = "user-avatar") {
+  if (!profile?.id) return renderAvatar(profile, className);
+
+  return `
+    <button
+      type="button"
+      class="avatar-profile-button"
+      data-profile-open="${esc(profile.id)}"
+      aria-label="Открыть профиль ${esc(profile.username || "пользователя")}"
+      title="Открыть профиль"
+    >
+      ${renderAvatar(profile, className)}
+    </button>
   `;
 }
 
@@ -392,7 +405,8 @@ async function loadFeed() {
       <article class="post">
 
         <div class="post-head">
-          ${renderAvatar(author)}
+
+          ${renderAvatarButton(author, "post-avatar")}
 
           <div class="user-info">
             <strong>${esc(author.username || "Пользователь")}</strong>
@@ -409,6 +423,7 @@ async function loadFeed() {
           <span class="post-date">
             ${formatTime(post.created_at)}
           </span>
+
         </div>
 
         <div class="post-body">
@@ -424,8 +439,6 @@ async function loadFeed() {
       Публикаций пока нет. Будь первым!
     </div>
   `;
-
-  bindProfileButtons();
 }
 
 // =====================================
@@ -458,7 +471,7 @@ async function searchPeople() {
     .limit(30);
 
   if (term) {
-    const cleanTerm = term.replace(/^@/, "");
+    const cleanTerm = term.replace(/^@/, "").replace(/[,%()]/g, "");
 
     query = query.or(
       `username.ilike.%${cleanTerm}%,handle.ilike.%${cleanTerm}%`
@@ -500,7 +513,7 @@ async function searchPeople() {
       action = `<span class="muted">Заявка отправлена</span>`;
     } else {
       action = `
-        <button class="primary" data-add="${person.id}">
+        <button class="primary" data-add="${esc(person.id)}">
           Добавить в друзья
         </button>
       `;
@@ -510,10 +523,17 @@ async function searchPeople() {
       <div class="result-row">
 
         <div class="person-main">
-          ${renderAvatar(person)}
+
+          ${renderAvatarButton(person)}
 
           <div class="user-info">
-            <strong>${esc(person.username)}</strong>
+            <button
+              type="button"
+              class="person-name-button"
+              data-profile-open="${esc(person.id)}"
+            >
+              ${esc(person.username)}
+            </button>
 
             <span class="pill">
               ${esc(roleLabel(person.role))}
@@ -527,11 +547,13 @@ async function searchPeople() {
               ${esc(person.status || "Статус не указан")}
             </small>
           </div>
+
         </div>
 
-        <div>${action}</div>
-
-        ${profileLink(person)}
+        <div class="person-actions">
+          ${action}
+          ${profileLink(person)}
+        </div>
 
       </div>
     `;
@@ -542,8 +564,6 @@ async function searchPeople() {
       sendFriendRequest(button.dataset.add);
     });
   });
-
-  bindProfileButtons();
 }
 
 async function sendFriendRequest(id) {
@@ -637,20 +657,27 @@ async function loadFriends() {
       <div class="result-row">
 
         <div class="person-main">
-          ${renderAvatar(person)}
+          ${renderAvatarButton(person)}
 
           <div class="user-info">
-            <strong>${esc(person.username || "Пользователь")}</strong>
+            <button
+              type="button"
+              class="person-name-button"
+              data-profile-open="${esc(person.id || "")}"
+            >
+              ${esc(person.username || "Пользователь")}
+            </button>
+
             <small class="muted">${profileHandle(person)}</small>
           </div>
         </div>
 
         <span>
-          <button class="primary" data-accept="${request.id}">
+          <button class="primary" data-accept="${esc(request.id)}">
             Принять
           </button>
 
-          <button class="secondary" data-reject="${request.id}">
+          <button class="secondary" data-reject="${esc(request.id)}">
             Отклонить
           </button>
         </span>
@@ -677,11 +704,19 @@ async function loadFriends() {
     <div class="result-row">
 
       <div class="person-main">
-        ${renderAvatar(person)}
+        ${renderAvatarButton(person)}
 
         <div class="user-info">
-          <strong>${esc(person.username)}</strong>
+          <button
+            type="button"
+            class="person-name-button"
+            data-profile-open="${esc(person.id)}"
+          >
+            ${esc(person.username)}
+          </button>
+
           <small class="muted">${profileHandle(person)}</small>
+
           <small class="muted">
             ${esc(person.status || "Статус не указан")}
           </small>
@@ -690,7 +725,7 @@ async function loadFriends() {
 
       <button
         class="primary"
-        data-open-chat="${person.id}"
+        data-open-chat="${esc(person.id)}"
         data-open-name="${esc(person.username)}"
       >
         Написать
@@ -709,8 +744,6 @@ async function loadFriends() {
       );
     });
   });
-
-  bindProfileButtons();
 }
 
 async function answerRequest(id, status) {
@@ -742,7 +775,7 @@ async function loadMessageContacts() {
   $("messageContacts").innerHTML = friends.map(person => `
     <button
       class="chat-contact ${activeChatUser?.id === person.id ? "active" : ""}"
-      data-chat-id="${person.id}"
+      data-chat-id="${esc(person.id)}"
       data-chat-name="${esc(person.username)}"
     >
       ${renderAvatar(person, "chat-contact-avatar")}
@@ -776,7 +809,9 @@ async function openChat(friendId, friendName) {
     username: friendName
   };
 
-  $("chatHeader").textContent = friendName;
+  $("chatHeader").innerHTML = `
+    <p class="muted">Загрузка профиля...</p>
+  `;
 
   $("chatHistory").innerHTML = `
     <p class="muted">Загрузка переписки...</p>
@@ -784,6 +819,46 @@ async function openChat(friendId, friendName) {
 
   $("messageInput").disabled = false;
   $("messageSend").disabled = false;
+
+  const { data: friend, error } = await supabase
+    .from("profiles")
+    .select(`
+      id,
+      username,
+      role,
+      status,
+      handle,
+      avatar_url,
+      avatar_emoji,
+      bio,
+      created_at
+    `)
+    .eq("id", friendId)
+    .single();
+
+  if (error || !friend) {
+    say("Не удалось загрузить профиль собеседника.");
+    $("chatHeader").textContent = friendName || "Переписка";
+    return;
+  }
+
+  activeChatUser = friend;
+
+  $("chatHeader").innerHTML = `
+    <button
+      type="button"
+      class="chat-header-profile"
+      data-profile-open="${esc(friend.id)}"
+      title="Открыть профиль"
+    >
+      ${renderAvatar(friend, "chat-header-avatar")}
+
+      <span class="chat-header-info">
+        <strong>${esc(friend.username)}</strong>
+        <small>${esc(friend.status || "Статус не указан")}</small>
+      </span>
+    </button>
+  `;
 
   await loadMessageContacts();
   await loadChatMessages();
@@ -963,13 +1038,15 @@ function renderProfile() {
 
     <p class="muted">
       В TheAppleBook с
-      ${new Date(profile.created_at).toLocaleDateString("ru-RU")}
+      ${profile.created_at
+        ? new Date(profile.created_at).toLocaleDateString("ru-RU")
+        : "неизвестной даты"}
     </p>
   `;
 }
 
 // =====================================
-// ОТКРЫТИЕ ПРОФИЛЯ ПОЛЬЗОВАТЕЛЯ
+// ОТКРЫТИЕ ПУБЛИЧНОГО ПРОФИЛЯ
 // =====================================
 
 async function openPublicProfile(id) {
@@ -1003,67 +1080,99 @@ async function openPublicProfile(id) {
     return;
   }
 
-  const existing = $("publicProfileModal");
-
-  if (existing) existing.remove();
+  $("publicProfileModal")?.remove();
 
   const modal = document.createElement("div");
+
   modal.id = "publicProfileModal";
   modal.className = "profile-modal";
 
   modal.innerHTML = `
     <div class="profile-modal-card">
 
-      <button class="profile-modal-close" type="button">×</button>
+      <button
+        class="profile-modal-close"
+        type="button"
+        aria-label="Закрыть профиль"
+      >×</button>
 
       ${renderAvatar(data, "profile-large-avatar")}
 
       <h2>${esc(data.username)}</h2>
 
-      <span class="pill">${esc(roleLabel(data.role))}</span>
+      <span class="pill">
+        ${esc(roleLabel(data.role))}
+      </span>
 
       <p class="muted">${profileHandle(data)}</p>
 
-      <p>
-        <strong>Статус:</strong>
-        ${esc(data.status || "Не указан")}
-      </p>
+      <div class="public-profile-info">
 
-      <p>
-        <strong>О себе:</strong>
-        ${esc(data.bio || "Пока ничего не написано.")}
-      </p>
+        <div class="public-profile-item">
+          <strong>Статус</strong>
+          <span>${esc(data.status || "Не указан")}</span>
+        </div>
 
-      <p class="muted">
-        В TheAppleBook с
-        ${new Date(data.created_at).toLocaleDateString("ru-RU")}
-      </p>
+        <div class="public-profile-item">
+          <strong>О себе</strong>
+          <span>${esc(data.bio || "Пока ничего не написано.")}</span>
+        </div>
+
+        <div class="public-profile-item">
+          <strong>Дата регистрации</strong>
+          <span>
+            ${data.created_at
+              ? new Date(data.created_at).toLocaleDateString("ru-RU")
+              : "Неизвестно"}
+          </span>
+        </div>
+
+      </div>
 
     </div>
   `;
 
   document.body.appendChild(modal);
 
-  modal.querySelector(".profile-modal-close").addEventListener("click", () => {
+  const closeModal = () => {
     modal.remove();
-  });
+    document.removeEventListener("keydown", handleEscape);
+  };
+
+  const handleEscape = event => {
+    if (event.key === "Escape") {
+      closeModal();
+    }
+  };
+
+  modal.querySelector(".profile-modal-close").addEventListener("click", closeModal);
 
   modal.addEventListener("click", event => {
-    if (event.target === modal) modal.remove();
+    if (event.target === modal) {
+      closeModal();
+    }
   });
+
+  document.addEventListener("keydown", handleEscape);
 }
 
-function bindProfileButtons() {
-  document.querySelectorAll("[data-profile-open]").forEach(button => {
-    if (button.dataset.bound === "true") return;
+// Единый обработчик для всех кнопок открытия профиля.
+// Работает и с элементами, которые создаются динамически.
 
-    button.dataset.bound = "true";
+document.addEventListener("click", event => {
+  const button = event.target.closest("[data-profile-open]");
 
-    button.addEventListener("click", () => {
-      openPublicProfile(button.dataset.profileOpen);
-    });
-  });
-}
+  if (!button) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const profileId = button.dataset.profileOpen;
+
+  if (profileId) {
+    openPublicProfile(profileId);
+  }
+});
 
 // =====================================
 // НАСТРОЙКИ
@@ -1131,6 +1240,8 @@ $("profileForm")?.addEventListener("submit", async event => {
 
   renderProfile();
 
+  window.dispatchEvent(new CustomEvent("theapplebook:profile-updated"));
+
   say("Профиль сохранён.");
 });
 
@@ -1164,6 +1275,14 @@ window.addEventListener("theapplebook:profile-updated", async () => {
 
   if ($("myAvatar")) {
     $("myAvatar").innerHTML = avatarContent(data);
+  }
+
+  if ($("myName")) {
+    $("myName").textContent = data.username;
+  }
+
+  if ($("myStatus")) {
+    $("myStatus").textContent = data.status || "Статус не указан";
   }
 
   renderProfile();
@@ -1205,7 +1324,7 @@ async function loadAdmin() {
     const controls = person.role === "owner"
       ? `<span class="pill">OWNER — защищён</span>`
       : `
-        <select data-role-select="${person.id}">
+        <select data-role-select="${esc(person.id)}">
           ${options.map(role => `
             <option value="${role}" ${role === person.role ? "selected" : ""}>
               ${roleLabel(role)}
@@ -1213,7 +1332,7 @@ async function loadAdmin() {
           `).join("")}
         </select>
 
-        <button class="secondary" data-role-save="${person.id}">
+        <button class="secondary" data-role-save="${esc(person.id)}">
           Сохранить
         </button>
       `;
@@ -1222,10 +1341,17 @@ async function loadAdmin() {
       <div class="result-row">
 
         <div class="person-main">
-          ${renderAvatar(person)}
+          ${renderAvatarButton(person)}
 
           <div class="user-info">
-            <strong>${esc(person.username)}</strong>
+            <button
+              type="button"
+              class="person-name-button"
+              data-profile-open="${esc(person.id)}"
+            >
+              ${esc(person.username)}
+            </button>
+
             <small class="muted">${profileHandle(person)}</small>
             <small class="muted">${esc(roleLabel(person.role))}</small>
           </div>
