@@ -1,4 +1,4 @@
-const CACHE_NAME = "theapplebook-v2";
+const CACHE_NAME = "theapplebook-v3";
 
 const FILES_TO_CACHE = [
   "./",
@@ -11,21 +11,35 @@ const FILES_TO_CACHE = [
   "./profile.js",
   "./extras.css",
   "./extras.js",
+  "./pwa.js",
+  "./moderation.js",
   "./manifest.json"
 ];
 
 // Установка новой версии
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache =>
-      cache.addAll(FILES_TO_CACHE)
-    )
+    caches.open(CACHE_NAME).then(async cache => {
+      await Promise.all(
+        FILES_TO_CACHE.map(async file => {
+          try {
+            await cache.add(file);
+          } catch (error) {
+            console.warn(
+              "TheAppleBook: Не удалось добавить в кеш:",
+              file,
+              error
+            );
+          }
+        })
+      );
+    })
   );
 
   self.skipWaiting();
 });
 
-// Удаление старых кэшей
+// Удаление старых кешей
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -40,7 +54,7 @@ self.addEventListener("activate", event => {
   self.clients.claim();
 });
 
-// Сначала пытаемся получить свежий файл с сервера
+// Получение файлов
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
 
@@ -67,15 +81,20 @@ self.addEventListener("fetch", event => {
         if (cached) return cached;
 
         if (event.request.mode === "navigate") {
-          return caches.match("./index.html");
+          const fallback = await caches.match("./index.html");
+
+          if (fallback) return fallback;
         }
 
-        return new Response("Нет подключения к интернету", {
-          status: 503,
-          headers: {
-            "Content-Type": "text/plain; charset=utf-8"
+        return new Response(
+          "Нет подключения к интернету",
+          {
+            status: 503,
+            headers: {
+              "Content-Type": "text/plain; charset=utf-8"
+            }
           }
-        });
+        );
       })
   );
 });
