@@ -6,6 +6,7 @@
   <title>TheAppleBook</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="achievements.css">
+  <link rel="stylesheet" href="profile.css">
 </head>
 <body>
   <header class="topbar">
@@ -53,7 +54,6 @@
 
     <section id="appView" class="hidden">
       <div class="layout">
-
         <aside class="sidebar">
           <div class="panel profile-mini">
             <div class="cover"></div>
@@ -76,7 +76,6 @@
         </aside>
 
         <section class="maincol">
-
           <section class="page" id="page-feed">
             <div class="hero">
               <h1>Твоя сеть. Твои люди.</h1>
@@ -91,7 +90,6 @@
                 <button class="primary">Опубликовать</button>
               </form>
             </div>
-
             <div id="feedList"></div>
           </section>
 
@@ -150,6 +148,7 @@
             <div class="panel pad">
               <h2>Мой профиль</h2>
               <div id="profileDetails"></div>
+              <div id="profileExtra"></div>
             </div>
 
             <div class="panel pad achievements-panel">
@@ -160,11 +159,9 @@
                 </div>
                 <span id="achievementCount" class="pill">0 достижений</span>
               </div>
-
               <div id="achievementsList" class="achievements-grid">
                 <p class="muted">Открой профиль для загрузки достижений.</p>
               </div>
-
               <p class="tiny muted">
                 Нажми на звёздочку, чтобы выбрать награды для показа.
               </p>
@@ -174,9 +171,7 @@
           <section class="page hidden" id="page-admin">
             <div class="panel pad">
               <h2>Administration Center</h2>
-              <p class="muted">
-                Назначай роли только людям, которым действительно доверяешь.
-              </p>
+              <p class="muted">Управление TheAppleBook.</p>
               <div id="adminContent"></div>
             </div>
           </section>
@@ -184,7 +179,6 @@
           <section class="page hidden" id="page-settings">
             <div class="panel pad">
               <h2>Настройки профиля</h2>
-
               <form id="profileForm">
                 <label>Имя пользователя
                   <input id="editName" maxlength="32" required>
@@ -203,9 +197,71 @@
 
                 <button class="primary">Сохранить профиль</button>
               </form>
+            </div>
+
+            <div class="panel pad">
+              <h2>🖼️ Оформление профиля</h2>
+
+              <div class="profile-editor-avatar">
+                <div id="avatarPreview" class="avatar-preview">?</div>
+                <div>
+                  <strong>Твоя аватарка</strong>
+                  <p class="muted tiny">Фотография или эмодзи.</p>
+                </div>
+              </div>
+
+              <label>Загрузить фотографию
+                <input type="file" id="avatarFile" accept="image/png,image/jpeg,image/webp">
+              </label>
+
+              <p class="tiny muted">Максимальный размер — 3 МБ. Форматы PNG, JPG, WebP.</p>
+
+              <button id="uploadAvatar" class="primary" type="button">
+                Загрузить аватар
+              </button>
 
               <hr>
 
+              <h3>Или выбери эмодзи</h3>
+              <div id="emojiPicker" class="emoji-picker">
+                <button type="button" data-emoji="🍎">🍎</button>
+                <button type="button" data-emoji="🦇">🦇</button>
+                <button type="button" data-emoji="🐺">🐺</button>
+                <button type="button" data-emoji="👑">👑</button>
+                <button type="button" data-emoji="🌙">🌙</button>
+                <button type="button" data-emoji="⭐">⭐</button>
+                <button type="button" data-emoji="🖤">🖤</button>
+                <button type="button" data-emoji="🔥">🔥</button>
+                <button type="button" data-emoji="🎭">🎭</button>
+                <button type="button" data-emoji="🕷️">🕷️</button>
+                <button type="button" data-emoji="⚡">⚡</button>
+                <button type="button" data-emoji="🌹">🌹</button>
+              </div>
+
+              <button id="saveEmoji" class="secondary" type="button">
+                Сохранить эмодзи
+              </button>
+
+              <hr>
+
+              <h3>Уникальное имя</h3>
+              <p class="muted tiny">Твой персональный ник в TheAppleBook.</p>
+
+              <label>Твой @ник
+                <div class="handle-input">
+                  <span>@</span>
+                  <input id="handleInput" maxlength="20" placeholder="viktors">
+                </div>
+              </label>
+
+              <button id="saveHandle" class="primary" type="button">
+                Сохранить ник
+              </button>
+
+              <p id="profileSettingsMessage" class="notice" aria-live="polite"></p>
+            </div>
+
+            <div class="panel pad">
               <h3>Внешний вид</h3>
               <label>Тема
                 <select id="themeSelect">
@@ -213,11 +269,9 @@
                   <option value="dark">Тёмная</option>
                 </select>
               </label>
-
               <button id="saveTheme" class="secondary">Сохранить тему</button>
             </div>
           </section>
-
         </section>
 
         <aside class="rightcol">
@@ -235,7 +289,6 @@
             <button class="link-btn" data-go="messages">Сообщения →</button>
           </div>
         </aside>
-
       </div>
     </section>
 
@@ -246,5 +299,6 @@
 
   <script type="module" src="app.js"></script>
   <script type="module" src="achievements.js"></script>
+  <script type="module" src="profile.js"></script>
 </body>
 </html>
