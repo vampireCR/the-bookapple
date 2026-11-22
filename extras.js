@@ -1,4 +1,3 @@
-```javascript
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
 const supabase = createClient(
@@ -32,6 +31,11 @@ const themes = [
 let currentUser = null;
 let currentProfile = null;
 
+function notify(message) {
+  const target = $("globalMessage");
+  if (target) target.textContent = message;
+}
+
 function addStyles() {
   if ($("extrasStyles")) return;
 
@@ -40,38 +44,58 @@ function addStyles() {
 
   style.textContent = `
     body[data-theme="midnight"] {
-      --wine:#263d78; --wine2:#14264f;
-      --pale:#e4ebff; --bg:#e6eaf4;
-      --paper:#fff; --ink:#202a42;
-      --line:#cbd4e8; --muted:#71809e;
+      --wine:#263d78;
+      --wine2:#14264f;
+      --pale:#e4ebff;
+      --bg:#e6eaf4;
+      --paper:#fff;
+      --ink:#202a42;
+      --line:#cbd4e8;
+      --muted:#71809e;
     }
 
     body[data-theme="forest"] {
-      --wine:#286344; --wine2:#163e2b;
-      --pale:#e1f0e6; --bg:#e5eee7;
-      --paper:#fff; --ink:#20382b;
-      --line:#c6d9cc; --muted:#718579;
+      --wine:#286344;
+      --wine2:#163e2b;
+      --pale:#e1f0e6;
+      --bg:#e5eee7;
+      --paper:#fff;
+      --ink:#20382b;
+      --line:#c6d9cc;
+      --muted:#718579;
     }
 
     body[data-theme="lavender"] {
-      --wine:#7954a6; --wine2:#50336f;
-      --pale:#eee5f8; --bg:#eee9f4;
-      --paper:#fff; --ink:#30253d;
-      --line:#d8cce7; --muted:#897b98;
+      --wine:#7954a6;
+      --wine2:#50336f;
+      --pale:#eee5f8;
+      --bg:#eee9f4;
+      --paper:#fff;
+      --ink:#30253d;
+      --line:#d8cce7;
+      --muted:#897b98;
     }
 
     body[data-theme="graphite"] {
-      --wine:#41464e; --wine2:#252a31;
-      --pale:#e3e5e8; --bg:#dfe1e4;
-      --paper:#f9fafb; --ink:#24272c;
-      --line:#c6c9ce; --muted:#747a83;
+      --wine:#41464e;
+      --wine2:#252a31;
+      --pale:#e3e5e8;
+      --bg:#dfe1e4;
+      --paper:#f9fafb;
+      --ink:#24272c;
+      --line:#c6c9ce;
+      --muted:#747a83;
     }
 
     body[data-theme="dark"] {
-      --wine:#73354b; --wine2:#45202e;
-      --pale:#382a30; --bg:#191518;
-      --paper:#292226; --ink:#f5edf0;
-      --line:#4b3940; --muted:#b9aab0;
+      --wine:#73354b;
+      --wine2:#45202e;
+      --pale:#382a30;
+      --bg:#191518;
+      --paper:#292226;
+      --ink:#f5edf0;
+      --line:#4b3940;
+      --muted:#b9aab0;
     }
 
     .language-settings {
@@ -109,18 +133,18 @@ function addStyles() {
   document.head.appendChild(style);
 }
 
-function notify(message) {
-  const target = $("globalMessage");
-  if (target) target.textContent = message;
-}
-
 function applyTheme(theme) {
   if (!themes.some(item => item[0] === theme)) {
     theme = "burgundy";
   }
 
   document.body.dataset.theme = theme;
+  document.body.classList.toggle("dark", theme === "dark");
+
   localStorage.setItem("apple-theme", theme);
+
+  const select = $("themeSelect");
+  if (select) select.value = theme;
 }
 
 async function saveLanguage(language) {
@@ -142,29 +166,37 @@ async function saveLanguage(language) {
     .eq("id", currentUser.id);
 
   if (error) {
-    notify("Не удалось сохранить язык: " + error.message);
+    notify("Ошибка сохранения языка: " + error.message);
     return;
   }
 
-  if (currentProfile) currentProfile.language = language;
+  if (currentProfile) {
+    currentProfile.language = language;
+  }
 
-  notify("Язык интерфейса сохранён.");
+  notify("Язык сохранён.");
 }
 
 function addLanguageSettings() {
   const settings = $("page-settings");
+
   if (!settings || $("languageSettings")) return;
 
   const firstPanel = settings.querySelector(".panel");
   if (!firstPanel) return;
 
   const box = document.createElement("div");
+
   box.id = "languageSettings";
   box.className = "language-settings";
 
   box.innerHTML = `
     <h3>🌍 Язык интерфейса</h3>
-    <label for="languageSelect">Выбери язык</label>
+
+    <label for="languageSelect">
+      Выбери язык
+    </label>
+
     <select id="languageSelect">
       ${languages.map(([code, name]) =>
         `<option value="${code}">${name}</option>`
@@ -177,8 +209,8 @@ function addLanguageSettings() {
   const select = $("languageSelect");
 
   select.value =
-    localStorage.getItem("apple-language") ||
     currentProfile?.language ||
+    localStorage.getItem("apple-language") ||
     "ru";
 
   select.addEventListener("change", () => {
@@ -194,16 +226,17 @@ function setupThemes() {
     `<option value="${code}">${name}</option>`
   ).join("");
 
-  select.value = localStorage.getItem("apple-theme") || "burgundy";
+  select.value =
+    localStorage.getItem("apple-theme") || "burgundy";
 
-  const saveButton = $("saveTheme");
+  const button = $("saveTheme");
 
-  if (saveButton && !saveButton.dataset.extrasBound) {
-    saveButton.dataset.extrasBound = "true";
+  if (button && !button.dataset.extrasBound) {
+    button.dataset.extrasBound = "true";
 
-    saveButton.addEventListener("click", () => {
+    button.addEventListener("click", () => {
       applyTheme(select.value);
-      notify("Тема оформления изменена.");
+      notify("Тема оформления сохранена.");
     });
   }
 }
@@ -212,15 +245,20 @@ async function addOwnerAchievementPanel() {
   if (!currentProfile || currentProfile.role !== "owner") return;
 
   const page = $("page-profile");
+
   if (!page || $("ownerAchievementPanel")) return;
 
   const panel = document.createElement("div");
+
   panel.id = "ownerAchievementPanel";
   panel.className = "panel pad owner-achievement-box";
 
   panel.innerHTML = `
     <h2>👑 OWNER CONTROL</h2>
-    <p class="muted">Управление собственными достижениями.</p>
+
+    <p class="muted">
+      Управление собственными достижениями.
+    </p>
 
     <label for="ownerAchievementSelect">
       Выбери достижение
@@ -245,10 +283,11 @@ async function addOwnerAchievementPanel() {
     .order("title");
 
   const select = $("ownerAchievementSelect");
+  const message = $("ownerAchievementMessage");
 
   if (error) {
     select.innerHTML = `<option value="">Ошибка загрузки</option>`;
-    $("ownerAchievementMessage").textContent = error.message;
+    message.textContent = error.message;
     return;
   }
 
@@ -260,10 +299,10 @@ async function addOwnerAchievementPanel() {
 
   $("ownerGiveAchievement").addEventListener("click", async () => {
     const code = select.value;
+
     if (!code) return;
 
     const button = $("ownerGiveAchievement");
-    const message = $("ownerAchievementMessage");
 
     button.disabled = true;
     message.textContent = "Выдаём достижение...";
@@ -295,7 +334,9 @@ async function initializeExtras() {
     localStorage.getItem("apple-theme") || "burgundy"
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
 
   if (!user) return;
 
@@ -315,13 +356,15 @@ async function initializeExtras() {
   currentProfile = profile;
 
   const language =
-    localStorage.getItem("apple-language") ||
     profile.language ||
+    localStorage.getItem("apple-language") ||
     "ru";
 
   document.documentElement.lang = language;
   document.documentElement.dir =
     language === "ar" ? "rtl" : "ltr";
+
+  localStorage.setItem("apple-language", language);
 
   addLanguageSettings();
   setupThemes();
@@ -341,7 +384,7 @@ document.addEventListener("click", event => {
   }
 });
 
-supabase.auth.onAuthStateChange((event) => {
+supabase.auth.onAuthStateChange(event => {
   if (event === "SIGNED_OUT") {
     currentUser = null;
     currentProfile = null;
@@ -353,4 +396,3 @@ supabase.auth.onAuthStateChange((event) => {
 });
 
 initializeExtras();
-```
