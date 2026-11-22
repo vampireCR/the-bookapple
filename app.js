@@ -1,15 +1,10 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
-/*
-  Supabase configuration.
-  Используй только Publishable key.
-  Никогда не вставляй secret/service_role key.
-*/
 const SUPABASE_URL = "https://tzkxujrjrhyqxgzytaex.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_BrNnF8XCshRm1NmEYvQphg_hcNIJhQV";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
-const $ = (id) => document.getElementById(id);
+const $ = id => document.getElementById(id);
 
 let currentUser = null;
 let currentProfile = null;
@@ -17,6 +12,8 @@ let currentProfile = null;
 let activeChatUser = null;
 let messagesChannel = null;
 let searchTimer = null;
+let bootRunning = false;
+let sendingMessage = false;
 
 // ==============================
 // ОБЩИЕ ФУНКЦИИ
@@ -53,7 +50,19 @@ function isStaff(role) {
 }
 
 function formatTime(date) {
-  return new Date(date).toLocaleString();
+  return new Date(date).toLocaleString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+async function removeMessagesChannel() {
+  if (messagesChannel) {
+    await supabase.removeChannel(messagesChannel);
+    messagesChannel = null;
+  }
 }
 
 // ==============================
@@ -83,7 +92,10 @@ $("loginForm").addEventListener("submit", async event => {
     password: $("loginPassword").value
   });
 
-  if (error) return say(error.message, "authMessage");
+  if (error) {
+    say(error.message, "authMessage");
+    return;
+  }
 
   await boot();
 });
@@ -105,23 +117,24 @@ $("signupForm").addEventListener("submit", async event => {
     }
   });
 
-  if (error) return say(error.message, "authMessage");
+  if (error) {
+    say(error.message, "authMessage");
+    return;
+  }
 
   if (!data.session) {
-    return say(
+    say(
       "Аккаунт создан. Проверь почту и подтверди email, затем войди.",
       "authMessage"
     );
+    return;
   }
 
   await boot();
 });
 
 $("logoutBtn").addEventListener("click", async () => {
-  if (messagesChannel) {
-    await supabase.removeChannel(messagesChannel);
-    messagesChannel = null;
-  }
+  await removeMessagesChannel();
 
   await supabase.auth.signOut();
 
@@ -171,69 +184,95 @@ document.querySelectorAll("[data-go]").forEach(button => {
 // ==============================
 
 async function boot() {
-  const { data: { session } } = await supabase.auth.getSession();
+  if (bootRunning) return;
+  bootRunning = true;
 
-  if (!session) {
-    currentUser = null;
-    currentProfile = null;
+  try {
+    const { data: { session }, error: sessionError } =
+      await supabase.auth.getSession();
 
-    $("authView").classList.remove("hidden");
-    $("appView").classList.add("hidden");
+    if (sessionError) throw sessionError;
 
-    if (messagesChannel) {
-      await supabase.removeChannel(messagesChannel);
-      messagesChannel = null;
+    if (!session) {
+      currentUser = null;
+      currentProfile = null;
+      activeChatUser = null;
+
+      await removeMessagesChannel();
+
+      $("authView").classList.remove("hidden");
+      $("appView").classList.add("hidden");
+
+      return;
     }
 
-    return;
+    currentUser = session.user;
+
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", currentUser.id)
+      .single();
+
+    if (error || !profile) {
+      say("Профиль ещё создаётся. Обнови страницу через несколько секунд.");
+      return;
+    }
+
+    currentProfile = profile;
+
+    $("authView").classList.add("hidden");
+    $("appView").classList.remove("hidden");
+
+    $("topUser").textContent =
+      profile.username + " · " + roleLabel(profile.role);
+
+    $("myName").textContent = profile.username;
+    $("myAvatar").textContent =
+      profile.username.slice(0, 1).toUpperCase();
+
+    $("myRole").innerHTML =
+      `<span class="pill">${esc(roleLabel(profile.role))}</span>`;
+
+    $("myStatus").textContent =
+      profile.status || "Статус не указан";
+
+    $("adminNav").classList.toggle(
+      "hidden",
+      !["owner", "ceo", "deputy_ceo", "admin"].includes(profile.role)
+    );
+
+    document.body.classList.toggle(
+      "dark",
+      localStorage.getItem("apple-theme") === "dark"
+    );
+
+    setupMessagesRealtime();
+
+    showPage("feed");
+  } catch (error) {
+    say("Ошибка запуска: " + error.message);
+  } finally {
+    bootRunning = false;
   }
-
-  currentUser = session.user;
-
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", currentUser.id)
-    .single();
-
-  if (error || !profile) {
-    say("Профиль ещё создаётся. Попробуй обновить страницу через несколько секунд.");
-    return;
-  }
-
-  currentProfile = profile;
-
-  $("authView").classList.add("hidden");
-  $("appView").classList.remove("hidden");
-
-  $("topUser").textContent =
-    profile.username + " · " + roleLabel(profile.role);
-
-  $("myName").textContent = profile.username;
-  $("myAvatar").textContent = profile.username.slice(0, 1).toUpperCase();
-
-  $("myRole").innerHTML =
-    `<span class="pill">${esc(roleLabel(profile.role))}</span>`;
-
-  $("myStatus").textContent = profile.status || "Статус не указан";
-
-  $("adminNav").classList.toggle(
-    "hidden",
-    !["owner", "ceo", "deputy_ceo", "admin"].includes(profile.role)
-  );
-
-  document.body.classList.toggle(
-    "dark",
-    localStorage.getItem("apple-theme") === "dark"
-  );
-
-  setupMessagesRealtime();
-
-  showPage("feed");
 }
 
-supabase.auth.onAuthStateChange(() => {
-  setTimeout(() => boot(), 0);
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === "SIGNED_OUT") {
+    currentUser = null;
+    currentProfile = null;
+    activeChatUser = null;
+
+    removeMessagesChannel();
+
+    $("appView").classList.add("hidden");
+    $("authView").classList.remove("hidden");
+    $("topUser").textContent = "";
+  }
+
+  if (event === "SIGNED_IN" && session) {
+    setTimeout(() => boot(), 0);
+  }
 });
 
 // ==============================
@@ -246,6 +285,7 @@ $("postForm").addEventListener("submit", async event => {
   if (!currentUser) return;
 
   const content = $("postText").value.trim();
+
   if (!content) return;
 
   const { error } = await supabase
@@ -258,6 +298,8 @@ $("postForm").addEventListener("submit", async event => {
   if (error) return say(error.message);
 
   $("postText").value = "";
+
+  say("Публикация добавлена.");
 
   await loadFeed();
 });
@@ -388,6 +430,7 @@ async function sendFriendRequest(id) {
   if (error) return say(error.message);
 
   say("Заявка в друзья отправлена.");
+
   await searchPeople();
 }
 
@@ -425,7 +468,6 @@ async function getAcceptedFriends() {
     ...(received || []).map(item => item.profiles)
   ].filter(Boolean);
 
-  // Убираем возможные дубликаты.
   return [...new Map(all.map(person => [person.id, person])).values()];
 }
 
@@ -477,7 +519,8 @@ async function loadFriends() {
           ${esc(person.status || "Статус не указан")}
         </small>
       </div>
-      <button class="primary" data-open-chat="${person.id}"
+      <button class="primary"
+        data-open-chat="${person.id}"
         data-open-name="${esc(person.username)}">
         Написать
       </button>
@@ -487,6 +530,7 @@ async function loadFriends() {
   document.querySelectorAll("[data-open-chat]").forEach(button => {
     button.addEventListener("click", () => {
       showPage("messages");
+
       openChat(
         button.dataset.openChat,
         button.dataset.openName
@@ -503,12 +547,14 @@ async function answerRequest(id, status) {
 
   if (error) return say(error.message);
 
+  say(status === "accepted" ? "Пользователь добавлен в друзья." : "Заявка отклонена.");
+
   await loadFriends();
 }
 
- // ==============================
- // ЛИЧНЫЕ СООБЩЕНИЯ
- // ==============================
+// ==============================
+// ЛИЧНЫЕ СООБЩЕНИЯ
+// ==============================
 
 async function loadMessageContacts() {
   if (!currentUser) return;
@@ -534,11 +580,15 @@ async function loadMessageContacts() {
 
   document.querySelectorAll("[data-chat-id]").forEach(button => {
     button.addEventListener("click", () => {
-      openChat(button.dataset.chatId, button.dataset.chatName);
+      openChat(
+        button.dataset.chatId,
+        button.dataset.chatName
+      );
     });
   });
 }
 
+// Открытие чата.
 async function openChat(friendId, friendName) {
   if (!currentUser) return;
 
@@ -548,18 +598,21 @@ async function openChat(friendId, friendName) {
   };
 
   $("chatHeader").textContent = friendName;
+
   $("chatHistory").innerHTML = `
     <p class="muted">Загрузка переписки...</p>
   `;
 
   $("messageInput").disabled = false;
   $("messageSend").disabled = false;
-  $("messageInput").focus();
 
   await loadMessageContacts();
   await loadChatMessages();
+
+  $("messageInput").focus();
 }
 
+// Загрузка истории сообщений.
 async function loadChatMessages() {
   if (!currentUser || !activeChatUser) return;
 
@@ -576,13 +629,16 @@ async function loadChatMessages() {
 
   if (error) {
     $("chatHistory").innerHTML = `
-      <p class="muted">Не удалось загрузить сообщения: ${esc(error.message)}</p>
+      <p class="muted">
+        Ошибка загрузки сообщений: ${esc(error.message)}
+      </p>
     `;
     return;
   }
 
-  // Пока запрос выполнялся, пользователь мог открыть другой чат.
-  if (!activeChatUser || activeChatUser.id !== selectedFriendId) return;
+  if (!activeChatUser || activeChatUser.id !== selectedFriendId) {
+    return;
+  }
 
   $("chatHistory").innerHTML = (data || []).map(message => {
     const mine = message.sender_id === currentUser.id;
@@ -596,7 +652,9 @@ async function loadChatMessages() {
       </div>
     `;
   }).join("") || `
-    <p class="muted">Сообщений пока нет. Напиши первым!</p>
+    <p class="muted">
+      Сообщений пока нет. Напиши первым!
+    </p>
   `;
 
   $("chatHistory").scrollTop = $("chatHistory").scrollHeight;
@@ -606,7 +664,7 @@ async function loadChatMessages() {
 $("messageForm").addEventListener("submit", async event => {
   event.preventDefault();
 
-  if (!currentUser || !activeChatUser) return;
+  if (!currentUser || !activeChatUser || sendingMessage) return;
 
   const content = $("messageInput").value.trim();
 
@@ -614,6 +672,7 @@ $("messageForm").addEventListener("submit", async event => {
 
   const receiverId = activeChatUser.id;
 
+  sendingMessage = true;
   $("messageSend").disabled = true;
 
   const { error } = await supabase
@@ -624,6 +683,7 @@ $("messageForm").addEventListener("submit", async event => {
       content
     });
 
+  sendingMessage = false;
   $("messageSend").disabled = false;
 
   if (error) {
@@ -633,12 +693,15 @@ $("messageForm").addEventListener("submit", async event => {
 
   $("messageInput").value = "";
 
-  await loadChatMessages();
+  if (activeChatUser?.id === receiverId) {
+    await loadChatMessages();
+  }
+
   $("messageInput").focus();
 });
 
 // ==============================
-// SUPABASE REALTIME
+// REALTIME — ЖИВЫЕ СООБЩЕНИЯ
 // ==============================
 
 function setupMessagesRealtime() {
@@ -651,6 +714,7 @@ function setupMessagesRealtime() {
 
   messagesChannel = supabase
     .channel("private-messages-" + currentUser.id)
+
     .on(
       "postgres_changes",
       {
@@ -662,7 +726,6 @@ function setupMessagesRealtime() {
       async payload => {
         const newMessage = payload.new;
 
-        // Если открыт чат с отправителем — обновляем его сразу.
         if (
           activeChatUser &&
           activeChatUser.id === newMessage.sender_id
@@ -673,7 +736,16 @@ function setupMessagesRealtime() {
         }
       }
     )
-    .subscribe();
+
+    .subscribe(status => {
+      if (status === "SUBSCRIBED") {
+        console.log("TheAppleBook: Realtime messages connected.");
+      }
+
+      if (status === "CHANNEL_ERROR") {
+        say("Не удалось подключить обновление сообщений в реальном времени.");
+      }
+    });
 }
 
 // ==============================
@@ -690,16 +762,19 @@ function renderProfile() {
       ${esc(profile.username)}
       <span class="pill">${esc(roleLabel(profile.role))}</span>
     </h3>
+
     <p>
       <strong>Статус:</strong>
       ${esc(profile.status || "Не указано")}
     </p>
+
     <p>
       <strong>О себе:</strong>
       ${esc(profile.bio || "Пока ничего не написано.")}
     </p>
+
     <p class="muted">
-      В TheAppleBook с ${new Date(profile.created_at).toLocaleDateString()}
+      В TheAppleBook с ${new Date(profile.created_at).toLocaleDateString("ru-RU")}
     </p>
   `;
 }
@@ -751,7 +826,7 @@ $("saveTheme").addEventListener("click", () => {
 
   document.body.classList.toggle("dark", theme === "dark");
 
-  say("Тема сохранена в этом браузере.");
+  say("Тема сохранена.");
 });
 
 // ==============================
@@ -791,6 +866,7 @@ async function loadAdmin() {
             </option>
           `).join("")}
         </select>
+
         <button class="secondary" data-role-save="${person.id}">
           Сохранить
         </button>
