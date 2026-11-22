@@ -5,34 +5,27 @@ const FILES_TO_CACHE = [
   "./index.html",
   "./style.css",
   "./app.js",
-  "./profile.js",
-  "./profile.css",
-  "./achievements.js",
   "./achievements.css",
-  "./extras.js",
+  "./achievements.js",
+  "./profile.css",
+  "./profile.js",
   "./extras.css",
-  "./pwa.js",
-  "./manifest.json",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png"
+  "./extras.js",
+  "./manifest.json"
 ];
 
+// Установка новой версии
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(async cache => {
-      for (const file of FILES_TO_CACHE) {
-        try {
-          await cache.add(file);
-        } catch (error) {
-          console.warn("Не удалось добавить в кэш:", file, error);
-        }
-      }
-    })
+    caches.open(CACHE_NAME).then(cache =>
+      cache.addAll(FILES_TO_CACHE)
+    )
   );
 
   self.skipWaiting();
 });
 
+// Удаление старых кэшей
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -47,56 +40,42 @@ self.addEventListener("activate", event => {
   self.clients.claim();
 });
 
+// Сначала пытаемся получить свежий файл с сервера
 self.addEventListener("fetch", event => {
-  const request = event.request;
+  if (event.request.method !== "GET") return;
 
-  if (request.method !== "GET") return;
-
-  const url = new URL(request.url);
+  const url = new URL(event.request.url);
 
   if (url.origin !== self.location.origin) return;
 
-  if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request)
-        .then(response => {
-          if (response.ok) {
-            const copy = response.clone();
-
-            caches.open(CACHE_NAME).then(cache => {
-              cache.put("./index.html", copy);
-            });
-          }
-
-          return response;
-        })
-        .catch(async () => {
-          return (
-            await caches.match(request) ||
-            await caches.match("./index.html")
-          );
-        })
-    );
-
-    return;
-  }
-
   event.respondWith(
-    caches.match(request).then(async cached => {
-      const networkRequest = fetch(request)
-        .then(response => {
-          if (response.ok) {
-            const copy = response.clone();
+    fetch(event.request)
+      .then(response => {
+        if (response && response.ok) {
+          const copy = response.clone();
 
-            caches.open(CACHE_NAME).then(cache => {
-              cache.put(request, copy);
-            });
+          caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, copy);
+          });
+        }
+
+        return response;
+      })
+      .catch(async () => {
+        const cached = await caches.match(event.request);
+
+        if (cached) return cached;
+
+        if (event.request.mode === "navigate") {
+          return caches.match("./index.html");
+        }
+
+        return new Response("Нет подключения к интернету", {
+          status: 503,
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8"
           }
-
-          return response;
         });
-
-      return cached || networkRequest;
-    })
+      })
   );
 });
