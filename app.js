@@ -1,23 +1,26 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
+/*
+  Supabase configuration.
+  Используй только Publishable key.
+  Никогда не вставляй secret/service_role key.
+*/
 const SUPABASE_URL = "https://tzkxujrjrhyqxgzytaex.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_BrNnF8XCshRm1NmEYvQphg_hcNIJhQV";
 
-const configured =
-  !SUPABASE_URL.startsWith("PASTE_") &&
-  !SUPABASE_PUBLISHABLE_KEY.startsWith("PASTE_");
-
-const supabase = configured
-  ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
-  : null;
-
-const $ = id => document.getElementById(id);
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+const $ = (id) => document.getElementById(id);
 
 let currentUser = null;
 let currentProfile = null;
-let activeChatFriend = null;
+
+let activeChatUser = null;
 let messagesChannel = null;
 let searchTimer = null;
+
+// ==============================
+// ОБЩИЕ ФУНКЦИИ
+// ==============================
 
 function say(message, target = "globalMessage") {
   const el = $(target);
@@ -31,7 +34,7 @@ function esc(value = "") {
     ">": "&gt;",
     '"': "&quot;",
     "'": "&#39;"
-  })[c]);
+  }[c]));
 }
 
 function roleLabel(role) {
@@ -49,6 +52,14 @@ function isStaff(role) {
   return ["owner", "ceo", "deputy_ceo", "admin", "moderator"].includes(role);
 }
 
+function formatTime(date) {
+  return new Date(date).toLocaleString();
+}
+
+// ==============================
+// АВТОРИЗАЦИЯ
+// ==============================
+
 function switchAuth(tab) {
   $("loginForm").classList.toggle("hidden", tab !== "login");
   $("signupForm").classList.toggle("hidden", tab !== "signup");
@@ -64,16 +75,8 @@ document.querySelectorAll(".tab").forEach(button => {
   button.addEventListener("click", () => switchAuth(button.dataset.tab));
 });
 
-// ==============================
-// АВТОРИЗАЦИЯ
-// ==============================
-
-$("loginForm").addEventListener("submit", async e => {
-  e.preventDefault();
-
-  if (!supabase) {
-    return say("Не настроено подключение Supabase.", "authMessage");
-  }
+$("loginForm").addEventListener("submit", async event => {
+  event.preventDefault();
 
   const { error } = await supabase.auth.signInWithPassword({
     email: $("loginEmail").value.trim(),
@@ -85,12 +88,8 @@ $("loginForm").addEventListener("submit", async e => {
   await boot();
 });
 
-$("signupForm").addEventListener("submit", async e => {
-  e.preventDefault();
-
-  if (!supabase) {
-    return say("Не настроено подключение Supabase.", "authMessage");
-  }
+$("signupForm").addEventListener("submit", async event => {
+  event.preventDefault();
 
   const username = $("signupName").value.trim();
 
@@ -128,7 +127,7 @@ $("logoutBtn").addEventListener("click", async () => {
 
   currentUser = null;
   currentProfile = null;
-  activeChatFriend = null;
+  activeChatUser = null;
 
   $("appView").classList.add("hidden");
   $("authView").classList.remove("hidden");
@@ -136,7 +135,7 @@ $("logoutBtn").addEventListener("click", async () => {
 });
 
 // ==============================
-// НАВИГАЦИЯ
+// ПЕРЕКЛЮЧЕНИЕ СТРАНИЦ
 // ==============================
 
 function showPage(name) {
@@ -172,30 +171,20 @@ document.querySelectorAll("[data-go]").forEach(button => {
 // ==============================
 
 async function boot() {
-  if (!supabase) {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
+    currentUser = null;
+    currentProfile = null;
+
     $("authView").classList.remove("hidden");
     $("appView").classList.add("hidden");
 
-    say("Добавь ключи Supabase в app.js.", "authMessage");
-    return;
-  }
-
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
-
-  if (!session) {
     if (messagesChannel) {
       await supabase.removeChannel(messagesChannel);
       messagesChannel = null;
     }
 
-    currentUser = null;
-    currentProfile = null;
-    activeChatFriend = null;
-
-    $("authView").classList.remove("hidden");
-    $("appView").classList.add("hidden");
     return;
   }
 
@@ -208,7 +197,7 @@ async function boot() {
     .single();
 
   if (error || !profile) {
-    say("Профиль ещё создаётся. Обнови страницу через несколько секунд.");
+    say("Профиль ещё создаётся. Попробуй обновить страницу через несколько секунд.");
     return;
   }
 
@@ -221,15 +210,12 @@ async function boot() {
     profile.username + " · " + roleLabel(profile.role);
 
   $("myName").textContent = profile.username;
-
-  $("myAvatar").textContent =
-    profile.username.slice(0, 1).toUpperCase();
+  $("myAvatar").textContent = profile.username.slice(0, 1).toUpperCase();
 
   $("myRole").innerHTML =
     `<span class="pill">${esc(roleLabel(profile.role))}</span>`;
 
-  $("myStatus").textContent =
-    profile.status || "Статус не указан";
+  $("myStatus").textContent = profile.status || "Статус не указан";
 
   $("adminNav").classList.toggle(
     "hidden",
@@ -241,25 +227,25 @@ async function boot() {
     localStorage.getItem("apple-theme") === "dark"
   );
 
-  subscribeToMessages();
+  setupMessagesRealtime();
+
   showPage("feed");
 }
 
-supabase?.auth.onAuthStateChange(() => {
+supabase.auth.onAuthStateChange(() => {
   setTimeout(() => boot(), 0);
 });
 
 // ==============================
-// ПУБЛИКАЦИИ
+// ЛЕНТА
 // ==============================
 
-$("postForm").addEventListener("submit", async e => {
-  e.preventDefault();
+$("postForm").addEventListener("submit", async event => {
+  event.preventDefault();
 
   if (!currentUser) return;
 
   const content = $("postText").value.trim();
-
   if (!content) return;
 
   const { error } = await supabase
@@ -291,14 +277,9 @@ async function loadFeed() {
     <article class="post">
       <div class="post-head">
         ${esc(post.profiles?.username || "User")}
-        <span class="pill">
-          ${esc(roleLabel(post.profiles?.role))}
-        </span>
-        <span class="post-date">
-          ${new Date(post.created_at).toLocaleString()}
-        </span>
+        <span class="pill">${esc(roleLabel(post.profiles?.role))}</span>
+        <span class="post-date">${formatTime(post.created_at)}</span>
       </div>
-
       <div class="post-body">${esc(post.content)}</div>
     </article>
   `).join("") || `
@@ -337,26 +318,42 @@ async function searchPeople() {
 
   if (error) return say(error.message);
 
-  const { data: mine } = await supabase
+  const { data: outgoing } = await supabase
     .from("friendships")
     .select("recipient_id,status")
     .eq("requester_id", currentUser.id);
 
-  const sent = new Map(
-    (mine || []).map(item => [item.recipient_id, item.status])
-  );
+  const { data: incoming } = await supabase
+    .from("friendships")
+    .select("requester_id,status")
+    .eq("recipient_id", currentUser.id);
+
+  const relations = new Map();
+
+  (outgoing || []).forEach(item => {
+    relations.set(item.recipient_id, item.status);
+  });
+
+  (incoming || []).forEach(item => {
+    relations.set(item.requester_id, item.status);
+  });
 
   $("peopleResults").innerHTML = (data || []).map(person => {
-    const state = sent.get(person.id);
+    const state = relations.get(person.id);
 
-    const action =
-      state === "pending"
-        ? "Заявка отправлена"
-        : state === "accepted"
-          ? "Уже друзья"
-          : `<button class="primary" data-add="${person.id}">
-               Добавить в друзья
-             </button>`;
+    let action = "";
+
+    if (state === "accepted") {
+      action = `<span class="pill">Уже друзья</span>`;
+    } else if (state === "pending") {
+      action = `<span class="muted">Заявка отправлена</span>`;
+    } else {
+      action = `
+        <button class="primary" data-add="${person.id}">
+          Добавить в друзья
+        </button>
+      `;
+    }
 
     return `
       <div class="result-row">
@@ -391,33 +388,65 @@ async function sendFriendRequest(id) {
   if (error) return say(error.message);
 
   say("Заявка в друзья отправлена.");
-  searchPeople();
+  await searchPeople();
 }
 
 // ==============================
 // ДРУЗЬЯ
 // ==============================
 
+async function getAcceptedFriends() {
+  if (!currentUser) return [];
+
+  const { data: sent, error: sentError } = await supabase
+    .from("friendships")
+    .select("recipient_id,profiles!friendships_recipient_id_fkey(id,username,status)")
+    .eq("requester_id", currentUser.id)
+    .eq("status", "accepted");
+
+  if (sentError) {
+    say(sentError.message);
+    return [];
+  }
+
+  const { data: received, error: receivedError } = await supabase
+    .from("friendships")
+    .select("requester_id,profiles!friendships_requester_id_fkey(id,username,status)")
+    .eq("recipient_id", currentUser.id)
+    .eq("status", "accepted");
+
+  if (receivedError) {
+    say(receivedError.message);
+    return [];
+  }
+
+  const all = [
+    ...(sent || []).map(item => item.profiles),
+    ...(received || []).map(item => item.profiles)
+  ].filter(Boolean);
+
+  // Убираем возможные дубликаты.
+  return [...new Map(all.map(person => [person.id, person])).values()];
+}
+
 async function loadFriends() {
   if (!currentUser) return;
 
-  const { data: incoming, error: incomingError } = await supabase
+  const { data: incoming, error } = await supabase
     .from("friendships")
     .select("id,requester_id,profiles!friendships_requester_id_fkey(username)")
     .eq("recipient_id", currentUser.id)
     .eq("status", "pending");
 
-  if (incomingError) say(incomingError.message);
+  if (error) say(error.message);
 
   $("incomingRequests").innerHTML = (incoming || []).map(request => `
     <div class="result-row">
       <strong>${esc(request.profiles?.username || "Пользователь")}</strong>
-
       <span>
         <button class="primary" data-accept="${request.id}">
           Принять
         </button>
-
         <button class="secondary" data-reject="${request.id}">
           Отклонить
         </button>
@@ -437,35 +466,33 @@ async function loadFriends() {
     });
   });
 
-  const { data: sent, error: sentError } = await supabase
-    .from("friendships")
-    .select("recipient_id,profiles!friendships_recipient_id_fkey(id,username,status)")
-    .eq("requester_id", currentUser.id)
-    .eq("status", "accepted");
+  const friends = await getAcceptedFriends();
 
-  const { data: received, error: receivedError } = await supabase
-    .from("friendships")
-    .select("requester_id,profiles!friendships_requester_id_fkey(id,username,status)")
-    .eq("recipient_id", currentUser.id)
-    .eq("status", "accepted");
-
-  if (sentError || receivedError) {
-    return say((sentError || receivedError).message);
-  }
-
-  const friends = [
-    ...(sent || []).map(item => item.profiles),
-    ...(received || []).map(item => item.profiles)
-  ].filter(Boolean);
-
-  $("friendsList").innerHTML = friends.map(friend => `
+  $("friendsList").innerHTML = friends.map(person => `
     <div class="result-row">
-      <strong>${esc(friend.username)}</strong>
-      <span class="muted">
-        ${esc(friend.status || "Статус не указан")}
-      </span>
+      <div>
+        <strong>${esc(person.username)}</strong>
+        <br>
+        <small class="muted">
+          ${esc(person.status || "Статус не указан")}
+        </small>
+      </div>
+      <button class="primary" data-open-chat="${person.id}"
+        data-open-name="${esc(person.username)}">
+        Написать
+      </button>
     </div>
   `).join("") || `<p class="muted">Пока нет друзей.</p>`;
+
+  document.querySelectorAll("[data-open-chat]").forEach(button => {
+    button.addEventListener("click", () => {
+      showPage("messages");
+      openChat(
+        button.dataset.openChat,
+        button.dataset.openName
+      );
+    });
+  });
 }
 
 async function answerRequest(id, status) {
@@ -479,111 +506,83 @@ async function answerRequest(id, status) {
   await loadFriends();
 }
 
-// ==============================
-// ЛИЧНЫЕ СООБЩЕНИЯ
-// ==============================
+ // ==============================
+ // ЛИЧНЫЕ СООБЩЕНИЯ
+ // ==============================
 
 async function loadMessageContacts() {
   if (!currentUser) return;
 
-  const box = $("messageContacts");
+  const friends = await getAcceptedFriends();
 
-  box.innerHTML = `<p class="muted">Загрузка друзей...</p>`;
-
-  const { data: sent, error: sentError } = await supabase
-    .from("friendships")
-    .select("recipient_id,profiles!friendships_recipient_id_fkey(id,username)")
-    .eq("requester_id", currentUser.id)
-    .eq("status", "accepted");
-
-  const { data: received, error: receivedError } = await supabase
-    .from("friendships")
-    .select("requester_id,profiles!friendships_requester_id_fkey(id,username)")
-    .eq("recipient_id", currentUser.id)
-    .eq("status", "accepted");
-
-  if (sentError || receivedError) {
-    box.textContent = "Не удалось загрузить друзей.";
-    return say((sentError || receivedError).message);
-  }
-
-  const friends = [
-    ...(sent || []).map(item => item.profiles),
-    ...(received || []).map(item => item.profiles)
-  ].filter(Boolean);
-
-  const uniqueFriends = [
-    ...new Map(friends.map(friend => [friend.id, friend])).values()
-  ];
-
-  if (!uniqueFriends.length) {
-    box.innerHTML = `<p class="muted">У тебя пока нет друзей.</p>`;
-    return;
-  }
-
-  box.innerHTML = uniqueFriends.map(friend => `
+  $("messageContacts").innerHTML = friends.map(person => `
     <button
-      class="chat-contact ${
-        activeChatFriend?.id === friend.id ? "active" : ""
-      }"
-      data-chat-friend="${friend.id}"
-      data-chat-name="${esc(friend.username)}"
+      class="chat-contact ${activeChatUser?.id === person.id ? "active" : ""}"
+      data-chat-id="${person.id}"
+      data-chat-name="${esc(person.username)}"
     >
       <span class="chat-contact-avatar">
-        ${esc(friend.username.slice(0, 1).toUpperCase())}
+        ${esc(person.username.slice(0, 1).toUpperCase())}
       </span>
-
-      <strong>${esc(friend.username)}</strong>
+      <span>${esc(person.username)}</span>
     </button>
-  `).join("");
+  `).join("") || `
+    <p class="muted">
+      У тебя пока нет друзей. Добавь кого-нибудь, чтобы начать переписку.
+    </p>
+  `;
 
-  document.querySelectorAll("[data-chat-friend]").forEach(button => {
+  document.querySelectorAll("[data-chat-id]").forEach(button => {
     button.addEventListener("click", () => {
-      openChat(
-        button.dataset.chatFriend,
-        button.dataset.chatName
-      );
+      openChat(button.dataset.chatId, button.dataset.chatName);
     });
   });
 }
 
 async function openChat(friendId, friendName) {
-  activeChatFriend = {
+  if (!currentUser) return;
+
+  activeChatUser = {
     id: friendId,
     username: friendName
   };
 
-  $("chatHeader").textContent = "Переписка с " + friendName;
+  $("chatHeader").textContent = friendName;
+  $("chatHistory").innerHTML = `
+    <p class="muted">Загрузка переписки...</p>
+  `;
 
   $("messageInput").disabled = false;
   $("messageSend").disabled = false;
+  $("messageInput").focus();
 
   await loadMessageContacts();
-  await loadChatHistory();
-
-  $("messageInput").focus();
+  await loadChatMessages();
 }
 
-async function loadChatHistory() {
-  if (!activeChatFriend || !currentUser) return;
+async function loadChatMessages() {
+  if (!currentUser || !activeChatUser) return;
 
-  const friendId = activeChatFriend.id;
+  const selectedFriendId = activeChatUser.id;
 
   const { data, error } = await supabase
     .from("messages")
     .select("id,sender_id,receiver_id,content,created_at")
     .or(
-      `and(sender_id.eq.${currentUser.id},receiver_id.eq.${friendId}),and(sender_id.eq.${friendId},receiver_id.eq.${currentUser.id})`
+      `and(sender_id.eq.${currentUser.id},receiver_id.eq.${selectedFriendId}),and(sender_id.eq.${selectedFriendId},receiver_id.eq.${currentUser.id})`
     )
     .order("created_at", { ascending: true })
-    .limit(200);
+    .limit(100);
 
   if (error) {
-    $("chatHistory").innerHTML =
-      `<p class="muted">Не удалось загрузить сообщения.</p>`;
-
-    return say(error.message);
+    $("chatHistory").innerHTML = `
+      <p class="muted">Не удалось загрузить сообщения: ${esc(error.message)}</p>
+    `;
+    return;
   }
+
+  // Пока запрос выполнялся, пользователь мог открыть другой чат.
+  if (!activeChatUser || activeChatUser.id !== selectedFriendId) return;
 
   $("chatHistory").innerHTML = (data || []).map(message => {
     const mine = message.sender_id === currentUser.id;
@@ -591,30 +590,29 @@ async function loadChatHistory() {
     return `
       <div class="chat-message ${mine ? "mine" : "theirs"}">
         ${esc(message.content)}
-
         <span class="chat-time">
-          ${new Date(message.created_at).toLocaleString()}
+          ${formatTime(message.created_at)}
         </span>
       </div>
     `;
   }).join("") || `
-    <p class="muted">Сообщений пока нет. Начни разговор!</p>
+    <p class="muted">Сообщений пока нет. Напиши первым!</p>
   `;
 
-  const history = $("chatHistory");
-  history.scrollTop = history.scrollHeight;
+  $("chatHistory").scrollTop = $("chatHistory").scrollHeight;
 }
 
-$("messageForm").addEventListener("submit", async e => {
-  e.preventDefault();
+// Отправка сообщения.
+$("messageForm").addEventListener("submit", async event => {
+  event.preventDefault();
 
-  if (!currentUser || !activeChatFriend) {
-    return say("Сначала выбери друга.");
-  }
+  if (!currentUser || !activeChatUser) return;
 
   const content = $("messageInput").value.trim();
 
   if (!content) return;
+
+  const receiverId = activeChatUser.id;
 
   $("messageSend").disabled = true;
 
@@ -622,24 +620,28 @@ $("messageForm").addEventListener("submit", async e => {
     .from("messages")
     .insert({
       sender_id: currentUser.id,
-      receiver_id: activeChatFriend.id,
+      receiver_id: receiverId,
       content
     });
 
   $("messageSend").disabled = false;
 
   if (error) {
-    return say(error.message);
+    say("Не удалось отправить сообщение: " + error.message);
+    return;
   }
 
   $("messageInput").value = "";
 
-  await loadChatHistory();
-
+  await loadChatMessages();
   $("messageInput").focus();
 });
 
-function subscribeToMessages() {
+// ==============================
+// SUPABASE REALTIME
+// ==============================
+
+function setupMessagesRealtime() {
   if (!currentUser) return;
 
   if (messagesChannel) {
@@ -655,22 +657,23 @@ function subscribeToMessages() {
         event: "INSERT",
         schema: "public",
         table: "messages",
-        filter: "receiver_id=eq." + currentUser.id
+        filter: `receiver_id=eq.${currentUser.id}`
       },
       async payload => {
+        const newMessage = payload.new;
+
+        // Если открыт чат с отправителем — обновляем его сразу.
         if (
-          activeChatFriend &&
-          payload.new.sender_id === activeChatFriend.id
+          activeChatUser &&
+          activeChatUser.id === newMessage.sender_id
         ) {
-          await loadChatHistory();
+          await loadChatMessages();
+        } else {
+          say("У тебя новое сообщение! Открой раздел «Сообщения».");
         }
       }
     )
-    .subscribe(status => {
-      if (status === "CHANNEL_ERROR") {
-        say("Не удалось подключить обновление сообщений в реальном времени.");
-      }
-    });
+    .subscribe();
 }
 
 // ==============================
@@ -687,22 +690,23 @@ function renderProfile() {
       ${esc(profile.username)}
       <span class="pill">${esc(roleLabel(profile.role))}</span>
     </h3>
-
     <p>
       <strong>Статус:</strong>
       ${esc(profile.status || "Не указано")}
     </p>
-
     <p>
       <strong>О себе:</strong>
       ${esc(profile.bio || "Пока ничего не написано.")}
     </p>
-
     <p class="muted">
       В TheAppleBook с ${new Date(profile.created_at).toLocaleDateString()}
     </p>
   `;
 }
+
+// ==============================
+// НАСТРОЙКИ
+// ==============================
 
 function fillSettings() {
   if (!currentProfile) return;
@@ -715,8 +719,8 @@ function fillSettings() {
     localStorage.getItem("apple-theme") || "burgundy";
 }
 
-$("profileForm").addEventListener("submit", async e => {
-  e.preventDefault();
+$("profileForm").addEventListener("submit", async event => {
+  event.preventDefault();
 
   const username = $("editName").value.trim();
 
@@ -777,20 +781,16 @@ async function loadAdmin() {
       ? ["member", "moderator", "admin", "deputy_ceo", "ceo"]
       : ["member", "moderator", "admin"];
 
-    const select = person.role === "owner"
+    const controls = person.role === "owner"
       ? `<span class="pill">OWNER — защищён</span>`
       : `
         <select data-role-select="${person.id}">
           ${options.map(role => `
-            <option
-              value="${role}"
-              ${role === person.role ? "selected" : ""}
-            >
+            <option value="${role}" ${role === person.role ? "selected" : ""}>
               ${roleLabel(role)}
             </option>
           `).join("")}
         </select>
-
         <button class="secondary" data-role-save="${person.id}">
           Сохранить
         </button>
@@ -803,8 +803,7 @@ async function loadAdmin() {
           <br>
           <small class="muted">${esc(roleLabel(person.role))}</small>
         </div>
-
-        <div>${select}</div>
+        <div>${controls}</div>
       </div>
     `;
   }).join("");
@@ -827,7 +826,7 @@ async function loadAdmin() {
       say("Роль обновлена.");
 
       await boot();
-      loadAdmin();
+      await loadAdmin();
     });
   });
 }
