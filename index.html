@@ -13,31 +13,59 @@
   </header>
 
   <main class="shell">
+    <!-- Авторизация -->
     <section id="authView" class="auth-card">
       <div class="auth-brand">🍎 TheAppleBook</div>
       <h1>Добро пожаловать</h1>
       <p class="muted">Старая атмосфера. Новые возможности.</p>
+
       <div class="tabs">
         <button class="tab active" data-tab="login">Войти</button>
         <button class="tab" data-tab="signup">Регистрация</button>
       </div>
+
       <form id="loginForm">
-        <label>Email<input id="loginEmail" type="email" required autocomplete="email"></label>
-        <label>Пароль<input id="loginPassword" type="password" required autocomplete="current-password"></label>
+        <label>
+          Email
+          <input id="loginEmail" type="email" required autocomplete="email">
+        </label>
+
+        <label>
+          Пароль
+          <input id="loginPassword" type="password" required autocomplete="current-password">
+        </label>
+
         <button class="primary wide">Войти</button>
       </form>
+
       <form id="signupForm" class="hidden">
-        <label>Имя пользователя<input id="signupName" maxlength="32" required placeholder="Например, Alex"></label>
-        <label>Email<input id="signupEmail" type="email" required autocomplete="email"></label>
-        <label>Пароль<input id="signupPassword" type="password" minlength="8" required autocomplete="new-password"></label>
+        <label>
+          Имя пользователя
+          <input id="signupName" maxlength="32" required placeholder="Например, Alex">
+        </label>
+
+        <label>
+          Email
+          <input id="signupEmail" type="email" required autocomplete="email">
+        </label>
+
+        <label>
+          Пароль
+          <input id="signupPassword" type="password" minlength="8" required autocomplete="new-password">
+        </label>
+
         <button class="primary wide">Создать аккаунт</button>
         <p class="tiny muted">После регистрации может потребоваться подтверждение email.</p>
       </form>
+
       <p id="authMessage" class="notice" aria-live="polite"></p>
     </section>
 
+    <!-- Основное приложение -->
     <section id="appView" class="hidden">
       <div class="layout">
+
+        <!-- Левое меню -->
         <aside class="sidebar">
           <div class="panel profile-mini">
             <div class="cover"></div>
@@ -46,12 +74,12 @@
             <div id="myRole"></div>
             <p id="myStatus" class="muted"></p>
           </div>
+
           <nav class="panel nav">
-            <button data-page="friends" class="nav-btn">👥 Друзья</button>
-            <button data-page="messages" class="nav-btn">💬 Сообщения</button>
             <button data-page="feed" class="nav-btn active">🏠 Лента</button>
             <button data-page="people" class="nav-btn">🔎 Поиск людей</button>
             <button data-page="friends" class="nav-btn">👥 Друзья</button>
+            <button data-page="messages" class="nav-btn">💬 Сообщения</button>
             <button data-page="profile" class="nav-btn">👤 Мой профиль</button>
             <button data-page="admin" id="adminNav" class="nav-btn hidden">👑 Управление</button>
             <button data-page="settings" class="nav-btn">⚙ Настройки</button>
@@ -59,22 +87,36 @@
           </nav>
         </aside>
 
+        <!-- Центральная часть -->
         <section class="maincol">
+
+          <!-- Лента -->
           <section class="page" id="page-feed">
             <div class="hero">
               <h1>Твоя сеть. Твои люди.</h1>
-              <p>TheAppleBook — место для общения.</p>
+              <p>TheAppleBook — место для общения и новых знакомств.</p>
             </div>
+
             <div class="panel pad">
               <h2>Создать публикацию</h2>
+
               <form id="postForm">
-                <textarea id="postText" maxlength="2000" rows="3" placeholder="О чём думаешь?" required></textarea>
+                <textarea
+                  id="postText"
+                  maxlength="2000"
+                  rows="3"
+                  placeholder="О чём думаешь?"
+                  required
+                ></textarea>
+
                 <button class="primary">Опубликовать</button>
               </form>
             </div>
+
             <div id="feedList"></div>
           </section>
 
+          <!-- Поиск людей -->
           <section class="page hidden" id="page-people">
             <div class="panel pad">
               <h2>Поиск пользователей</h2>
@@ -83,17 +125,68 @@
             </div>
           </section>
 
+          <!-- Друзья -->
           <section class="page hidden" id="page-friends">
             <div class="panel pad">
               <h2>Заявки в друзья</h2>
               <div id="incomingRequests"></div>
             </div>
+
             <div class="panel pad">
               <h2>Мои друзья</h2>
               <div id="friendsList"></div>
             </div>
           </section>
 
+          <!-- Личные сообщения -->
+          <section class="page hidden" id="page-messages">
+            <div class="panel pad">
+              <h2>💬 Личные сообщения</h2>
+              <p class="muted">Твоя личная переписка с друзьями.</p>
+
+              <div class="messages-layout">
+
+                <!-- Список контактов -->
+                <div class="messages-contacts">
+                  <h3>Мои друзья</h3>
+
+                  <div id="messageContacts">
+                    <p class="muted">Загрузка друзей...</p>
+                  </div>
+                </div>
+
+                <!-- Окно чата -->
+                <div class="chat-panel">
+
+                  <div id="chatHeader" class="chat-header">
+                    Выбери друга, чтобы начать переписку
+                  </div>
+
+                  <div id="chatHistory" class="chat-history">
+                    <p class="muted">Здесь будут отображаться сообщения.</p>
+                  </div>
+
+                  <form id="messageForm" class="message-form">
+                    <input
+                      id="messageInput"
+                      type="text"
+                      maxlength="2000"
+                      placeholder="Напиши сообщение..."
+                      autocomplete="off"
+                      disabled
+                    >
+
+                    <button id="messageSend" class="primary" disabled>
+                      Отправить
+                    </button>
+                  </form>
+
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Профиль -->
           <section class="page hidden" id="page-profile">
             <div class="panel pad">
               <h2>Мой профиль</h2>
@@ -101,20 +194,30 @@
             </div>
           </section>
 
+          <!-- Администрирование -->
           <section class="page hidden" id="page-admin">
             <div class="panel pad">
               <h2>Administration Center</h2>
-              <p class="muted">Назначай роли только людям, которым действительно доверяешь.</p>
+              <p class="muted">
+                Назначай роли только людям, которым действительно доверяешь.
+              </p>
               <div id="adminContent"></div>
             </div>
           </section>
 
+          <!-- Настройки -->
           <section class="page hidden" id="page-settings">
             <div class="panel pad">
               <h2>Настройки профиля</h2>
+
               <form id="profileForm">
-                <label>Имя пользователя<input id="editName" maxlength="32" required></label>
-                <label>Статус
+                <label>
+                  Имя пользователя
+                  <input id="editName" maxlength="32" required>
+                </label>
+
+                <label>
+                  Статус
                   <select id="editStatus">
                     <option value="">Не указано</option>
                     <option value="Интересуюсь">Интересуюсь</option>
@@ -122,22 +225,34 @@
                     <option value="В отношениях">В отношениях</option>
                   </select>
                 </label>
-                <label>О себе<textarea id="editBio" maxlength="240" rows="3"></textarea></label>
+
+                <label>
+                  О себе
+                  <textarea id="editBio" maxlength="240" rows="3"></textarea>
+                </label>
+
                 <button class="primary">Сохранить профиль</button>
               </form>
+
               <hr>
+
               <h3>Внешний вид</h3>
-              <label>Тема
+
+              <label>
+                Тема
                 <select id="themeSelect">
                   <option value="burgundy">Бордовая классика</option>
                   <option value="dark">Тёмная</option>
                 </select>
               </label>
+
               <button id="saveTheme" class="secondary">Сохранить тему</button>
             </div>
           </section>
+
         </section>
 
+        <!-- Правая колонка -->
         <aside class="rightcol">
           <div class="panel pad">
             <h3>О TheAppleBook</h3>
@@ -145,18 +260,23 @@
             <p>Владелец проекта: <strong>Viktor Serbin</strong></p>
             <p class="tiny muted">Роли и доступы проверяются базой данных.</p>
           </div>
+
           <div class="panel pad">
             <h3>Быстрый переход</h3>
             <button class="link-btn" data-go="people">Найти людей →</button>
             <button class="link-btn" data-go="friends">Мои друзья →</button>
+            <button class="link-btn" data-go="messages">Сообщения →</button>
           </div>
         </aside>
+
       </div>
     </section>
+
     <p id="globalMessage" class="global-message" aria-live="polite"></p>
   </main>
 
   <footer>TheAppleBook © 2026 · Founded by Viktor Serbin</footer>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>
