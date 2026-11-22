@@ -956,4 +956,41 @@ hr {
   .profile-modal-card {
     padding: 25px 18px;
   }
+}/* MODERATION */
+
+#privacySettings,
+#sanctionsPanel {
+  margin-top: 18px;
+}
+
+.privacy-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: normal;
+}
+
+.privacy-option input {
+  width: auto;
+  margin: 0;
+}
+
+.sanction-item {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 14px;
+  margin: 12px 0;
+  background: var(--paper);
+}
+
+.sanction-item p {
+  overflow-wrap: anywhere;
+}
+
+.sanction-notice {
+  border-left: 5px solid #b84b36;
+}
+
+.sanction-notice h3 {
+  color: #b84b36;
 }
