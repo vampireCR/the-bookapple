@@ -1,12 +1,14 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
-const SUPABASE_URL = "https://tzkxujrjrhyqxgzytaex.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_BrNnF8XCshRm1NmEYvQphg_hcNIJhQV";
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+const supabase = createClient(
+  "https://tzkxujrjrhyqxgzytaex.supabase.co",
+  "sb_publishable_BrNnF8XCshRm1NmEYvQphg_hcNIJhQV"
+);
 
 const list = document.getElementById("achievementsList");
 const count = document.getElementById("achievementCount");
+
+let loading = false;
 
 function escapeHTML(value = "") {
   return String(value).replace(/[&<>"']/g, char => ({
@@ -19,129 +21,149 @@ function escapeHTML(value = "") {
 }
 
 async function loadAchievements() {
-  if (!list || !count) return;
+  if (!list || !count || loading) return;
 
+  loading = true;
   list.innerHTML = `<p class="muted">Загружаем достижения...</p>`;
 
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  try {
+    const {
+      data: { user },
+      error: userError
+    } = await supabase.auth.getUser();
 
-  if (userError || !user) {
-    list.innerHTML = `<p class="muted">Войди в аккаунт, чтобы увидеть достижения.</p>`;
-    return;
-  }
+    if (userError || !user) {
+      list.innerHTML = `<p class="muted">Войди в аккаунт, чтобы увидеть достижения.</p>`;
+      count.textContent = "0 получено";
+      return;
+    }
 
-  const { error: syncError } = await supabase.rpc("sync_my_achievements");
+    const { error: syncError } = await supabase.rpc(
+      "sync_my_achievements"
+    );
 
-  if (syncError) {
-    list.innerHTML = `<p class="muted">Ошибка проверки достижений: ${escapeHTML(syncError.message)}</p>`;
-    return;
-  }
+    if (syncError) {
+      list.innerHTML =
+        `<p class="muted">Ошибка проверки достижений: ${escapeHTML(syncError.message)}</p>`;
+      return;
+    }
 
-  const { data, error } = await supabase
-    .from("user_achievements")
-    .select(`
-      id,
-      achievement_code,
-      earned_at,
-      is_featured,
-      achievement_definitions (
-        title,
-        description,
-        icon
-      )
-    `)
-    .eq("user_id", user.id)
-    .order("earned_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("user_achievements")
+      .select(`
+        id,
+        achievement_code,
+        earned_at,
+        is_featured,
+        achievement_definitions (
+          title,
+          description,
+          icon
+        )
+      `)
+      .eq("user_id", user.id)
+      .order("earned_at", { ascending: false });
 
-  if (error) {
-    list.innerHTML = `<p class="muted">Ошибка загрузки: ${escapeHTML(error.message)}</p>`;
-    return;
-  }
+    if (error) {
+      list.innerHTML =
+        `<p class="muted">Ошибка загрузки: ${escapeHTML(error.message)}</p>`;
+      return;
+    }
 
-  const achievements = data || [];
+    const achievements = data || [];
 
-  count.textContent = `${achievements.length} получено`;
+    count.textContent = `${achievements.length} получено`;
 
-  if (!achievements.length) {
-    list.innerHTML = `
-      <div class="achievement-empty">
-        <span>🎯</span>
-        <h3>Пока нет достижений</h3>
-        <p class="muted">Продолжай пользоваться TheAppleBook!</p>
-      </div>
-    `;
-    return;
-  }
-
-  list.innerHTML = achievements.map(item => {
-    const achievement = item.achievement_definitions;
-
-    if (!achievement) return "";
-
-    return `
-      <article class="achievement-card">
-        <div class="achievement-icon">${escapeHTML(achievement.icon)}</div>
-
-        <div class="achievement-info">
-          <h3>${escapeHTML(achievement.title)}</h3>
-          <p>${escapeHTML(achievement.description)}</p>
-          <small>
-            Получено: ${new Date(item.earned_at).toLocaleDateString("ru-RU")}
-          </small>
+    if (!achievements.length) {
+      list.innerHTML = `
+        <div class="achievement-empty">
+          <span>🎯</span>
+          <h3>Пока нет достижений</h3>
+          <p class="muted">Продолжай пользоваться TheAppleBook!</p>
         </div>
+      `;
+      return;
+    }
 
-        <button
-          class="achievement-feature ${item.is_featured ? "selected" : ""}"
-          data-achievement-id="${item.id}"
-          aria-label="Переключить отображение достижения"
-          title="Показать в профиле"
-        >${item.is_featured ? "★" : "☆"}</button>
-      </article>
-    `;
-  }).join("");
+    list.innerHTML = achievements.map(item => {
+      const achievement = item.achievement_definitions;
 
-  list.querySelectorAll("[data-achievement-id]").forEach(button => {
-    button.addEventListener("click", async () => {
-      const item = achievements.find(
-        achievement => achievement.id === button.dataset.achievementId
-      );
+      if (!achievement) return "";
 
-      if (!item) return;
+      return `
+        <article class="achievement-card">
+          <div class="achievement-icon">
+            ${escapeHTML(achievement.icon || "🏆")}
+          </div>
 
-      button.disabled = true;
+          <div class="achievement-info">
+            <h3>${escapeHTML(achievement.title || "Достижение")}</h3>
+            <p>${escapeHTML(achievement.description || "")}</p>
+            <small>
+              Получено: ${new Date(item.earned_at).toLocaleDateString("ru-RU")}
+            </small>
+          </div>
 
-      const { error } = await supabase
-        .from("user_achievements")
-        .update({ is_featured: !item.is_featured })
-        .eq("id", item.id)
-        .eq("user_id", user.id);
+          <button
+            class="achievement-feature ${item.is_featured ? "selected" : ""}"
+            data-achievement-id="${escapeHTML(item.id)}"
+            aria-label="Переключить отображение достижения"
+            title="Показать в профиле"
+          >${item.is_featured ? "★" : "☆"}</button>
+        </article>
+      `;
+    }).join("");
 
-      if (error) {
-        alert("Не удалось изменить отображение: " + error.message);
-        button.disabled = false;
-        return;
-      }
+    list.querySelectorAll("[data-achievement-id]").forEach(button => {
+      button.addEventListener("click", async () => {
+        const item = achievements.find(
+          achievement => String(achievement.id) === button.dataset.achievementId
+        );
 
-      await loadAchievements();
+        if (!item) return;
+
+        button.disabled = true;
+
+        const { error } = await supabase
+          .from("user_achievements")
+          .update({ is_featured: !item.is_featured })
+          .eq("id", item.id)
+          .eq("user_id", user.id);
+
+        if (error) {
+          alert("Не удалось изменить отображение: " + error.message);
+          button.disabled = false;
+          return;
+        }
+
+        await loadAchievements();
+      });
     });
-  });
+  } finally {
+    loading = false;
+  }
 }
 
-document.querySelectorAll('.nav-btn[data-page="profile"]').forEach(button => {
-  button.addEventListener("click", () => {
-    setTimeout(loadAchievements, 100);
-  });
-});
-
-document.querySelectorAll('[data-go="profile"]').forEach(button => {
-  button.addEventListener("click", () => {
-    setTimeout(loadAchievements, 100);
-  });
-});
-
-supabase.auth.onAuthStateChange((event) => {
-  if (event === "SIGNED_OUT") {
-    if (list) list.innerHTML = "";
-    if (count) count.textContent = "0 достижений";
+document.addEventListener("click", event => {
+  if (
+    event.target.closest('.nav-btn[data-page="profile"]') ||
+    event.target.closest('[data-go="profile"]')
+  ) {
+    setTimeout(loadAchievements, 150);
   }
 });
+
+window.addEventListener("apple-achievements-refresh", loadAchievements);
+
+supabase.auth.onAuthStateChange(event => {
+  if (event === "SIGNED_IN") {
+    setTimeout(loadAchievements, 300);
+  }
+
+  if (event === "SIGNED_OUT") {
+    if (list) list.innerHTML = "";
+    if (count) count.textContent = "0 получено";
+  }
+});
+
+loadAchievements();
