@@ -3,12 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#641b2b">
+  <meta name="description" content="TheAppleBook — социальная сеть для общения и новых знакомств.">
   <title>TheAppleBook</title>
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="achievements.css">
-<link rel="stylesheet" href="extras.css">
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="achievements.css">
+  <link rel="stylesheet" href="extras.css">
   <link rel="stylesheet" href="profile.css">
 </head>
+
 <body>
   <header class="topbar">
     <div class="brand">The<span>Apple</span>Book</div>
@@ -16,6 +24,8 @@
   </header>
 
   <main class="shell">
+
+    <!-- АВТОРИЗАЦИЯ -->
     <section id="authView" class="auth-card">
       <div class="auth-brand">🍎 TheAppleBook</div>
       <h1>Добро пожаловать</h1>
@@ -30,9 +40,11 @@
         <label>Email
           <input id="loginEmail" type="email" required autocomplete="email">
         </label>
+
         <label>Пароль
           <input id="loginPassword" type="password" required autocomplete="current-password">
         </label>
+
         <button class="primary wide">Войти</button>
       </form>
 
@@ -40,12 +52,15 @@
         <label>Имя пользователя
           <input id="signupName" maxlength="32" required placeholder="Например, Alex">
         </label>
+
         <label>Email
           <input id="signupEmail" type="email" required autocomplete="email">
         </label>
+
         <label>Пароль
           <input id="signupPassword" type="password" minlength="8" required autocomplete="new-password">
         </label>
+
         <button class="primary wide">Создать аккаунт</button>
         <p class="tiny muted">После регистрации может потребоваться подтверждение email.</p>
       </form>
@@ -53,9 +68,12 @@
       <p id="authMessage" class="notice" aria-live="polite"></p>
     </section>
 
+    <!-- ОСНОВНОЕ ПРИЛОЖЕНИЕ -->
     <section id="appView" class="hidden">
       <div class="layout">
+
         <aside class="sidebar">
+
           <div class="panel profile-mini">
             <div class="cover"></div>
             <div class="avatar" id="myAvatar">?</div>
@@ -70,13 +88,17 @@
             <button data-page="friends" class="nav-btn">👥 Друзья</button>
             <button data-page="messages" class="nav-btn">💬 Сообщения</button>
             <button data-page="profile" class="nav-btn">👤 Мой профиль</button>
+            <button data-page="app" class="nav-btn">📱 Приложение</button>
             <button data-page="admin" id="adminNav" class="nav-btn hidden">👑 Управление</button>
             <button data-page="settings" class="nav-btn">⚙ Настройки</button>
             <button id="logoutBtn" class="nav-btn">↪ Выйти</button>
           </nav>
+
         </aside>
 
         <section class="maincol">
+
+          <!-- ЛЕНТА -->
           <section class="page" id="page-feed">
             <div class="hero">
               <h1>Твоя сеть. Твои люди.</h1>
@@ -85,15 +107,19 @@
 
             <div class="panel pad">
               <h2>Создать публикацию</h2>
+
               <form id="postForm">
                 <textarea id="postText" maxlength="2000" rows="3"
                   placeholder="О чём думаешь?" required></textarea>
+
                 <button class="primary">Опубликовать</button>
               </form>
             </div>
+
             <div id="feedList"></div>
           </section>
 
+          <!-- ПОИСК -->
           <section class="page hidden" id="page-people">
             <div class="panel pad">
               <h2>Поиск пользователей</h2>
@@ -102,25 +128,30 @@
             </div>
           </section>
 
+          <!-- ДРУЗЬЯ -->
           <section class="page hidden" id="page-friends">
             <div class="panel pad">
               <h2>Заявки в друзья</h2>
               <div id="incomingRequests"></div>
             </div>
+
             <div class="panel pad">
               <h2>Мои друзья</h2>
               <div id="friendsList"></div>
             </div>
           </section>
 
+          <!-- СООБЩЕНИЯ -->
           <section class="page hidden" id="page-messages">
             <div class="panel pad">
               <h2>💬 Личные сообщения</h2>
               <p class="muted">Твоя личная переписка с друзьями.</p>
 
               <div class="messages-layout">
+
                 <div class="messages-contacts">
                   <h3>Мои друзья</h3>
+
                   <div id="messageContacts">
                     <p class="muted">Загрузка друзей...</p>
                   </div>
@@ -130,22 +161,28 @@
                   <div id="chatHeader" class="chat-header">
                     Выбери друга, чтобы начать переписку
                   </div>
+
                   <div id="chatHistory" class="chat-history" aria-live="polite">
                     <p class="muted">Здесь будут отображаться сообщения.</p>
                   </div>
+
                   <form id="messageForm" class="message-form">
                     <textarea id="messageInput" rows="2" maxlength="2000"
                       placeholder="Напиши сообщение..." autocomplete="off" disabled></textarea>
+
                     <button id="messageSend" class="primary" type="submit" disabled>
                       Отправить
                     </button>
                   </form>
                 </div>
+
               </div>
             </div>
           </section>
 
+          <!-- ПРОФИЛЬ -->
           <section class="page hidden" id="page-profile">
+
             <div class="panel pad">
               <h2>Мой профиль</h2>
               <div id="profileDetails"></div>
@@ -158,17 +195,94 @@
                   <h2>🏆 Мои достижения</h2>
                   <p class="muted">Твоя история в TheAppleBook.</p>
                 </div>
+
                 <span id="achievementCount" class="pill">0 достижений</span>
               </div>
+
               <div id="achievementsList" class="achievements-grid">
                 <p class="muted">Открой профиль для загрузки достижений.</p>
               </div>
+
               <p class="tiny muted">
                 Нажми на звёздочку, чтобы выбрать награды для показа.
               </p>
             </div>
+
           </section>
 
+          <!-- ПРИЛОЖЕНИЕ -->
+          <section class="page hidden" id="page-app">
+
+            <div class="hero app-hero">
+              <h1>📱 TheAppleBook App</h1>
+              <p>Твоя социальная сеть всегда под рукой.</p>
+            </div>
+
+            <div class="panel pad">
+              <h2>Установить TheAppleBook</h2>
+
+              <p class="muted">
+                Установи TheAppleBook на своё устройство и запускай
+                его отдельно от браузера.
+              </p>
+
+              <div class="app-install-card">
+                <div class="app-install-icon">🍎</div>
+
+                <div>
+                  <h3>TheAppleBook</h3>
+                  <p class="muted tiny">Официальное веб-приложение</p>
+                </div>
+              </div>
+
+              <button id="installAppButton" class="primary wide" type="button">
+                📲 Установить приложение
+              </button>
+
+              <p id="installAppMessage" class="notice" aria-live="polite">
+                Доступность установки зависит от браузера и устройства.
+              </p>
+            </div>
+
+            <div class="panel pad">
+              <h2>Возможности приложения</h2>
+
+              <div class="app-feature">
+                <span>⚡</span>
+                <div>
+                  <strong>Быстрый запуск</strong>
+                  <p class="muted">Открывай TheAppleBook с рабочего стола.</p>
+                </div>
+              </div>
+
+              <div class="app-feature">
+                <span>🎨</span>
+                <div>
+                  <strong>Твой дизайн</strong>
+                  <p class="muted">Сохраняй выбранную тему оформления.</p>
+                </div>
+              </div>
+
+              <div class="app-feature">
+                <span>💬</span>
+                <div>
+                  <strong>Общение</strong>
+                  <p class="muted">Друзья, публикации и личные сообщения.</p>
+                </div>
+              </div>
+
+              <div class="app-feature">
+                <span>🔄</span>
+                <div>
+                  <strong>Обновления</strong>
+                  <p class="muted">Новые версии будут появляться автоматически.</p>
+                </div>
+              </div>
+            </div>
+
+          </section>
+
+          <!-- УПРАВЛЕНИЕ -->
           <section class="page hidden" id="page-admin">
             <div class="panel pad">
               <h2>Administration Center</h2>
@@ -177,9 +291,12 @@
             </div>
           </section>
 
+          <!-- НАСТРОЙКИ -->
           <section class="page hidden" id="page-settings">
+
             <div class="panel pad">
               <h2>Настройки профиля</h2>
+
               <form id="profileForm">
                 <label>Имя пользователя
                   <input id="editName" maxlength="32" required>
@@ -205,6 +322,7 @@
 
               <div class="profile-editor-avatar">
                 <div id="avatarPreview" class="avatar-preview">?</div>
+
                 <div>
                   <strong>Твоя аватарка</strong>
                   <p class="muted tiny">Фотография или эмодзи.</p>
@@ -215,7 +333,9 @@
                 <input type="file" id="avatarFile" accept="image/png,image/jpeg,image/webp">
               </label>
 
-              <p class="tiny muted">Максимальный размер — 3 МБ. Форматы PNG, JPG, WebP.</p>
+              <p class="tiny muted">
+                Максимальный размер — 3 МБ. Форматы PNG, JPG, WebP.
+              </p>
 
               <button id="uploadAvatar" class="primary" type="button">
                 Загрузить аватар
@@ -224,6 +344,7 @@
               <hr>
 
               <h3>Или выбери эмодзи</h3>
+
               <div id="emojiPicker" class="emoji-picker">
                 <button type="button" data-emoji="🍎">🍎</button>
                 <button type="button" data-emoji="🦇">🦇</button>
@@ -264,18 +385,26 @@
 
             <div class="panel pad">
               <h3>Внешний вид</h3>
+
               <label>Тема
                 <select id="themeSelect">
                   <option value="burgundy">Бордовая классика</option>
                   <option value="dark">Тёмная</option>
                 </select>
               </label>
-              <button id="saveTheme" class="secondary">Сохранить тему</button>
+
+              <button id="saveTheme" class="secondary">
+                Сохранить тему
+              </button>
             </div>
+
           </section>
+
         </section>
 
+        <!-- ПРАВАЯ КОЛОНКА -->
         <aside class="rightcol">
+
           <div class="panel pad">
             <h3>О TheAppleBook</h3>
             <p class="muted">Основан 22 ноября 2026</p>
@@ -288,12 +417,16 @@
             <button class="link-btn" data-go="people">Найти людей →</button>
             <button class="link-btn" data-go="friends">Мои друзья →</button>
             <button class="link-btn" data-go="messages">Сообщения →</button>
+            <button class="link-btn" data-go="app">Приложение →</button>
           </div>
+
         </aside>
+
       </div>
     </section>
 
     <p id="globalMessage" class="global-message" aria-live="polite"></p>
+
   </main>
 
   <footer>TheAppleBook © 2026 · Founded by Viktor Serbin</footer>
@@ -302,5 +435,7 @@
   <script type="module" src="achievements.js"></script>
   <script type="module" src="profile.js"></script>
   <script type="module" src="extras.js"></script>
+  <script type="module" src="pwa.js"></script>
+
 </body>
 </html>
