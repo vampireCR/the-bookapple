@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TheAppleBook</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="achievements.css">
 </head>
 <body>
   <header class="topbar">
@@ -13,8 +14,6 @@
   </header>
 
   <main class="shell">
-
-    <!-- Авторизация -->
     <section id="authView" class="auth-card">
       <div class="auth-brand">🍎 TheAppleBook</div>
       <h1>Добро пожаловать</h1>
@@ -26,35 +25,25 @@
       </div>
 
       <form id="loginForm">
-        <label>
-          Email
+        <label>Email
           <input id="loginEmail" type="email" required autocomplete="email">
         </label>
-
-        <label>
-          Пароль
+        <label>Пароль
           <input id="loginPassword" type="password" required autocomplete="current-password">
         </label>
-
         <button class="primary wide">Войти</button>
       </form>
 
       <form id="signupForm" class="hidden">
-        <label>
-          Имя пользователя
+        <label>Имя пользователя
           <input id="signupName" maxlength="32" required placeholder="Например, Alex">
         </label>
-
-        <label>
-          Email
+        <label>Email
           <input id="signupEmail" type="email" required autocomplete="email">
         </label>
-
-        <label>
-          Пароль
+        <label>Пароль
           <input id="signupPassword" type="password" minlength="8" required autocomplete="new-password">
         </label>
-
         <button class="primary wide">Создать аккаунт</button>
         <p class="tiny muted">После регистрации может потребоваться подтверждение email.</p>
       </form>
@@ -62,11 +51,9 @@
       <p id="authMessage" class="notice" aria-live="polite"></p>
     </section>
 
-    <!-- Основное приложение -->
     <section id="appView" class="hidden">
       <div class="layout">
 
-        <!-- Левое меню -->
         <aside class="sidebar">
           <div class="panel profile-mini">
             <div class="cover"></div>
@@ -88,10 +75,8 @@
           </nav>
         </aside>
 
-        <!-- Центральная часть -->
         <section class="maincol">
 
-          <!-- Лента -->
           <section class="page" id="page-feed">
             <div class="hero">
               <h1>Твоя сеть. Твои люди.</h1>
@@ -100,16 +85,9 @@
 
             <div class="panel pad">
               <h2>Создать публикацию</h2>
-
               <form id="postForm">
-                <textarea
-                  id="postText"
-                  maxlength="2000"
-                  rows="3"
-                  placeholder="О чём думаешь?"
-                  required
-                ></textarea>
-
+                <textarea id="postText" maxlength="2000" rows="3"
+                  placeholder="О чём думаешь?" required></textarea>
                 <button class="primary">Опубликовать</button>
               </form>
             </div>
@@ -117,7 +95,6 @@
             <div id="feedList"></div>
           </section>
 
-          <!-- Поиск людей -->
           <section class="page hidden" id="page-people">
             <div class="panel pad">
               <h2>Поиск пользователей</h2>
@@ -126,76 +103,74 @@
             </div>
           </section>
 
-          <!-- Друзья -->
           <section class="page hidden" id="page-friends">
             <div class="panel pad">
               <h2>Заявки в друзья</h2>
               <div id="incomingRequests"></div>
             </div>
-
             <div class="panel pad">
               <h2>Мои друзья</h2>
               <div id="friendsList"></div>
             </div>
           </section>
 
-          <!-- Личные сообщения -->
           <section class="page hidden" id="page-messages">
             <div class="panel pad">
               <h2>💬 Личные сообщения</h2>
               <p class="muted">Твоя личная переписка с друзьями.</p>
 
               <div class="messages-layout">
-
-                <!-- Список друзей -->
                 <div class="messages-contacts">
                   <h3>Мои друзья</h3>
-
                   <div id="messageContacts">
                     <p class="muted">Загрузка друзей...</p>
                   </div>
                 </div>
 
-                <!-- Окно переписки -->
                 <div class="chat-panel">
-
                   <div id="chatHeader" class="chat-header">
                     Выбери друга, чтобы начать переписку
                   </div>
-
                   <div id="chatHistory" class="chat-history" aria-live="polite">
                     <p class="muted">Здесь будут отображаться сообщения.</p>
                   </div>
-
                   <form id="messageForm" class="message-form">
-                    <textarea
-                      id="messageInput"
-                      rows="2"
-                      maxlength="2000"
-                      placeholder="Напиши сообщение..."
-                      autocomplete="off"
-                      disabled
-                    ></textarea>
-
+                    <textarea id="messageInput" rows="2" maxlength="2000"
+                      placeholder="Напиши сообщение..." autocomplete="off" disabled></textarea>
                     <button id="messageSend" class="primary" type="submit" disabled>
                       Отправить
                     </button>
                   </form>
-
                 </div>
               </div>
             </div>
           </section>
 
-          <!-- Профиль -->
           <section class="page hidden" id="page-profile">
             <div class="panel pad">
               <h2>Мой профиль</h2>
               <div id="profileDetails"></div>
             </div>
+
+            <div class="panel pad achievements-panel">
+              <div class="achievements-heading">
+                <div>
+                  <h2>🏆 Мои достижения</h2>
+                  <p class="muted">Твоя история в TheAppleBook.</p>
+                </div>
+                <span id="achievementCount" class="pill">0 достижений</span>
+              </div>
+
+              <div id="achievementsList" class="achievements-grid">
+                <p class="muted">Открой профиль для загрузки достижений.</p>
+              </div>
+
+              <p class="tiny muted">
+                Нажми на звёздочку, чтобы выбрать награды для показа.
+              </p>
+            </div>
           </section>
 
-          <!-- Администрирование -->
           <section class="page hidden" id="page-admin">
             <div class="panel pad">
               <h2>Administration Center</h2>
@@ -206,29 +181,23 @@
             </div>
           </section>
 
-          <!-- Настройки -->
           <section class="page hidden" id="page-settings">
             <div class="panel pad">
               <h2>Настройки профиля</h2>
 
               <form id="profileForm">
-                <label>
-                  Имя пользователя
+                <label>Имя пользователя
                   <input id="editName" maxlength="32" required>
                 </label>
 
-                <label>
-                  Статус
+                <label>Статус
                   <select id="editStatus">
                     <option value="">Не указано</option>
                     <option value="Интересуюсь">Интересуюсь</option>
-                    <option value="Свободен/свободна">Свободен/свободна</option>
-                    <option value="В отношениях">В отношениях</option>
                   </select>
                 </label>
 
-                <label>
-                  О себе
+                <label>О себе
                   <textarea id="editBio" maxlength="240" rows="3"></textarea>
                 </label>
 
@@ -238,9 +207,7 @@
               <hr>
 
               <h3>Внешний вид</h3>
-
-              <label>
-                Тема
+              <label>Тема
                 <select id="themeSelect">
                   <option value="burgundy">Бордовая классика</option>
                   <option value="dark">Тёмная</option>
@@ -253,7 +220,6 @@
 
         </section>
 
-        <!-- Правая колонка -->
         <aside class="rightcol">
           <div class="panel pad">
             <h3>О TheAppleBook</h3>
@@ -279,5 +245,6 @@
   <footer>TheAppleBook © 2026 · Founded by Viktor Serbin</footer>
 
   <script type="module" src="app.js"></script>
+  <script type="module" src="achievements.js"></script>
 </body>
 </html>
