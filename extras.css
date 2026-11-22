@@ -1,0 +1,37 @@
+.extra-settings {
+  animation: extraAppear .25s ease;
+}
+
+.extra-avatar-preview img {
+  display: block;
+}
+
+.owner-achievement-box {
+  border-left: 4px solid var(--wine);
+}
+
+.owner-achievement-box h2 {
+  color: var(--wine);
+}
+
+.extra-settings button,
+.owner-achievement-box button {
+  transition: .2s ease;
+}
+
+.extra-settings button:hover,
+.owner-achievement-box button:hover {
+  transform: translateY(-1px);
+}
+
+@keyframes extraAppear {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
