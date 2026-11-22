@@ -36,6 +36,16 @@ function notify(message) {
   if (target) target.textContent = message;
 }
 
+function escapeHTML(value = "") {
+  return String(value).replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
 function addStyles() {
   if ($("extrasStyles")) return;
 
@@ -43,6 +53,17 @@ function addStyles() {
   style.id = "extrasStyles";
 
   style.textContent = `
+    body[data-theme="burgundy"] {
+      --wine:#641b2b;
+      --wine2:#42101d;
+      --pale:#f2e5e8;
+      --bg:#e9e2e4;
+      --paper:#fff;
+      --ink:#292126;
+      --line:#ded0d4;
+      --muted:#81747a;
+    }
+
     body[data-theme="midnight"] {
       --wine:#263d78;
       --wine2:#14264f;
@@ -170,9 +191,7 @@ async function saveLanguage(language) {
     return;
   }
 
-  if (currentProfile) {
-    currentProfile.language = language;
-  }
+  if (currentProfile) currentProfile.language = language;
 
   notify("Язык сохранён.");
 }
@@ -192,10 +211,7 @@ function addLanguageSettings() {
 
   box.innerHTML = `
     <h3>🌍 Язык интерфейса</h3>
-
-    <label for="languageSelect">
-      Выбери язык
-    </label>
+    <label for="languageSelect">Выбери язык</label>
 
     <select id="languageSelect">
       ${languages.map(([code, name]) =>
@@ -226,8 +242,9 @@ function setupThemes() {
     `<option value="${code}">${name}</option>`
   ).join("");
 
-  select.value =
-    localStorage.getItem("apple-theme") || "burgundy";
+  select.value = localStorage.getItem("apple-theme") || "burgundy";
+
+  applyTheme(select.value);
 
   const button = $("saveTheme");
 
@@ -239,6 +256,10 @@ function setupThemes() {
       notify("Тема оформления сохранена.");
     });
   }
+
+  select.addEventListener("change", () => {
+    applyTheme(select.value);
+  });
 }
 
 async function addOwnerAchievementPanel() {
@@ -256,9 +277,7 @@ async function addOwnerAchievementPanel() {
   panel.innerHTML = `
     <h2>👑 OWNER CONTROL</h2>
 
-    <p class="muted">
-      Управление собственными достижениями.
-    </p>
+    <p class="muted">Управление собственными достижениями.</p>
 
     <label for="ownerAchievementSelect">
       Выбери достижение
@@ -277,13 +296,14 @@ async function addOwnerAchievementPanel() {
 
   page.appendChild(panel);
 
+  const select = $("ownerAchievementSelect");
+  const message = $("ownerAchievementMessage");
+  const button = $("ownerGiveAchievement");
+
   const { data, error } = await supabase
     .from("achievement_definitions")
     .select("code,title,icon")
     .order("title");
-
-  const select = $("ownerAchievementSelect");
-  const message = $("ownerAchievementMessage");
 
   if (error) {
     select.innerHTML = `<option value="">Ошибка загрузки</option>`;
@@ -291,18 +311,21 @@ async function addOwnerAchievementPanel() {
     return;
   }
 
-  select.innerHTML = (data || []).map(item => `
-    <option value="${String(item.code).replace(/"/g, "&quot;")}">
-      ${item.icon || "🏆"} ${item.title}
+  if (!data?.length) {
+    select.innerHTML = `<option value="">Нет доступных достижений</option>`;
+    return;
+  }
+
+  select.innerHTML = data.map(item => `
+    <option value="${escapeHTML(item.code)}">
+      ${escapeHTML(item.icon || "🏆")} ${escapeHTML(item.title || item.code)}
     </option>
   `).join("");
 
-  $("ownerGiveAchievement").addEventListener("click", async () => {
+  button.addEventListener("click", async () => {
     const code = select.value;
 
     if (!code) return;
-
-    const button = $("ownerGiveAchievement");
 
     button.disabled = true;
     message.textContent = "Выдаём достижение...";
@@ -330,15 +353,20 @@ async function addOwnerAchievementPanel() {
 async function initializeExtras() {
   addStyles();
 
-  applyTheme(
-    localStorage.getItem("apple-theme") || "burgundy"
-  );
+  const savedTheme = localStorage.getItem("apple-theme") || "burgundy";
+  applyTheme(savedTheme);
+  setupThemes();
 
   const {
-    data: { user }
+    data: { user },
+    error: authError
   } = await supabase.auth.getUser();
 
-  if (!user) return;
+  if (authError || !user) {
+    currentUser = null;
+    currentProfile = null;
+    return;
+  }
 
   currentUser = user;
 
@@ -361,14 +389,13 @@ async function initializeExtras() {
     "ru";
 
   document.documentElement.lang = language;
-  document.documentElement.dir =
-    language === "ar" ? "rtl" : "ltr";
+  document.documentElement.dir = language === "ar" ? "rtl" : "ltr";
 
   localStorage.setItem("apple-language", language);
 
   addLanguageSettings();
   setupThemes();
-  addOwnerAchievementPanel();
+  await addOwnerAchievementPanel();
 }
 
 document.addEventListener("click", event => {
@@ -388,6 +415,7 @@ supabase.auth.onAuthStateChange(event => {
   if (event === "SIGNED_OUT") {
     currentUser = null;
     currentProfile = null;
+    $("ownerAchievementPanel")?.remove();
   }
 
   if (event === "SIGNED_IN") {
