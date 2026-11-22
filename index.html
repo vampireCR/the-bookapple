@@ -13,6 +13,7 @@
   </header>
 
   <main class="shell">
+
     <!-- Авторизация -->
     <section id="authView" class="auth-card">
       <div class="auth-brand">🍎 TheAppleBook</div>
@@ -146,7 +147,7 @@
 
               <div class="messages-layout">
 
-                <!-- Список контактов -->
+                <!-- Список друзей -->
                 <div class="messages-contacts">
                   <h3>Мои друзья</h3>
 
@@ -155,28 +156,28 @@
                   </div>
                 </div>
 
-                <!-- Окно чата -->
+                <!-- Окно переписки -->
                 <div class="chat-panel">
 
                   <div id="chatHeader" class="chat-header">
                     Выбери друга, чтобы начать переписку
                   </div>
 
-                  <div id="chatHistory" class="chat-history">
+                  <div id="chatHistory" class="chat-history" aria-live="polite">
                     <p class="muted">Здесь будут отображаться сообщения.</p>
                   </div>
 
                   <form id="messageForm" class="message-form">
-                    <input
+                    <textarea
                       id="messageInput"
-                      type="text"
+                      rows="2"
                       maxlength="2000"
                       placeholder="Напиши сообщение..."
                       autocomplete="off"
                       disabled
-                    >
+                    ></textarea>
 
-                    <button id="messageSend" class="primary" disabled>
+                    <button id="messageSend" class="primary" type="submit" disabled>
                       Отправить
                     </button>
                   </form>
