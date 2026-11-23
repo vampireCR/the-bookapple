@@ -8,6 +8,7 @@ const $ = id => document.getElementById(id);
 
 let currentUser = null;
 let currentProfile = null;
+let currentPresenceMode = "online";
 let activeChatUser = null;
 let messagesChannel = null;
 let searchTimer = null;
@@ -46,6 +47,18 @@ function roleLabel(role) {
 
 function isStaff(role) {
   return ["owner", "ceo", "deputy_ceo", "admin", "moderator"].includes(role);
+}
+
+function presenceLabel(mode) {
+  return ({ online: "🟢 В сети", invisible: "⚫ Невидимый", sleep: "🌙 Спящий режим", hidden: "Присутствие скрыто" })[mode] || "Присутствие скрыто";
+}
+
+async function fillPresenceForProfiles(container, profiles) {
+  await Promise.all((profiles || []).map(async person => {
+    const { data } = await supabase.rpc("visible_presence", { target_user: person.id });
+    const target = container?.querySelector(`[data-presence-for="${CSS.escape(person.id)}"]`);
+    if (target) target.textContent = presenceLabel(data);
+  }));
 }
 
 function formatTime(date) {
@@ -136,6 +149,8 @@ function showPage(name) {
   });
 
   if (name === "feed") loadFeed();
+  if (name === "notes") loadNotes();
+  if (name === "gifts") loadGiftShop();
   if (name === "people") searchPeople();
   if (name === "friends") loadFriends();
   if (name === "messages") loadMessageContacts();
@@ -205,7 +220,7 @@ $("signupForm")?.addEventListener("submit", async event => {
   });
 
   if (error) {
-    say(error.message, "authMessage");
+    say(error.code === "23505" ? "Это имя уже занято. Выберите другое." : error.message, "authMessage");
     return;
   }
 
@@ -303,7 +318,7 @@ async function boot() {
 
     if ($("myStatus")) {
       $("myStatus").textContent =
-        profile.status || "Статус не указан";
+        presenceLabel(currentPresenceMode);
     }
 
     $("adminNav")?.classList.toggle(
@@ -382,6 +397,7 @@ async function loadFeed() {
     .from("posts")
     .select(`
       id,
+      user_id,
       content,
       created_at,
       profiles (
@@ -430,6 +446,10 @@ async function loadFeed() {
           ${esc(post.content)}
         </div>
 
+        ${post.user_id === currentUser.id ? `<div class="post-actions"><button type="button" data-post-edit="${esc(post.id)}">Изменить</button><button type="button" data-post-delete="${esc(post.id)}">Удалить</button></div>` : ""}
+        <form class="comment-form" data-comment-form="${esc(post.id)}"><input maxlength="1000" required placeholder="Ответить пользователю"><button type="submit">Ответить</button></form>
+        <div class="post-comments" data-comments="${esc(post.id)}"></div>
+
         ${profileLink(author)}
 
       </article>
@@ -439,7 +459,49 @@ async function loadFeed() {
       Публикаций пока нет. Будь первым!
     </div>
   `;
+
+  await loadComments(data || []);
 }
+
+async function loadComments(posts) {
+  if (!posts.length) return;
+  const { data, error } = await supabase.from("post_comments").select("post_id,user_id,content,profiles(username)").in("post_id", posts.map(post => post.id)).order("created_at");
+  if (error) return;
+  for (const row of data || []) {
+    const target = document.querySelector(`[data-comments="${CSS.escape(row.post_id)}"]`);
+    if (!target) continue;
+    const line = document.createElement("p");
+    line.textContent = `${row.profiles?.username || "Пользователь"}: ${row.content}`;
+    target.append(line);
+  }
+}
+
+document.addEventListener("submit", async event => {
+  const form = event.target.closest("[data-comment-form]");
+  if (!form) return;
+  event.preventDefault();
+  const input = form.querySelector("input");
+  const { error } = await supabase.from("post_comments").insert({ post_id: form.dataset.commentForm, user_id: currentUser.id, content: input.value.trim() });
+  if (error) return say(error.message);
+  await loadFeed();
+});
+document.addEventListener("click", async event => {
+  const del = event.target.closest("[data-post-delete]");
+  const edit = event.target.closest("[data-post-edit]");
+  if (del) {
+    const { error } = await supabase.from("posts").delete().eq("id", del.dataset.postDelete).eq("user_id", currentUser.id);
+    if (error) return say(error.message);
+    await loadFeed();
+  }
+  if (edit) {
+    const body = edit.closest(".post")?.querySelector(".post-body");
+    const replacement = prompt("Изменить публикацию", body?.textContent || "");
+    if (replacement === null) return;
+    const { error } = await supabase.from("posts").update({ content: replacement.trim() }).eq("id", edit.dataset.postEdit).eq("user_id", currentUser.id);
+    if (error) return say(error.message);
+    await loadFeed();
+  }
+});
 
 // =====================================
 // ПОИСК ПОЛЬЗОВАТЕЛЕЙ
@@ -453,6 +515,8 @@ $("peopleSearch")?.addEventListener("input", () => {
 async function searchPeople() {
   if (!currentUser || !$("peopleResults")) return;
 
+  if ($("peopleWelcome")) $("peopleWelcome").textContent = "Welcome, " + (currentProfile?.username || "friend") + "!";
+
   const term = $("peopleSearch")?.value.trim() || "";
 
   let query = supabase
@@ -460,7 +524,6 @@ async function searchPeople() {
     .select(`
       id,
       username,
-      status,
       role,
       avatar_url,
       avatar_emoji,
@@ -500,6 +563,11 @@ async function searchPeople() {
 
   (incoming || []).forEach(item => {
     relations.set(item.requester_id, item.status);
+  });    relations.set(item.recipient_id, item.status);
+  });
+
+  (incoming || []).forEach(item => {
+    relations.set(item.requester_id, item.status);
   });
 
   $("peopleResults").innerHTML = (data || []).map(person => {
@@ -521,9 +589,7 @@ async function searchPeople() {
 
     return `
       <div class="result-row">
-
         <div class="person-main">
-
           ${renderAvatarButton(person)}
 
           <div class="user-info">
@@ -543,22 +609,21 @@ async function searchPeople() {
               ${profileHandle(person)}
             </small>
 
-            <small class="muted">
-              ${esc(person.status || "Статус не указан")}
+            <small class="muted" data-presence-for="${esc(person.id)}">
+              …
             </small>
           </div>
-
         </div>
 
         <div class="person-actions">
           ${action}
           ${profileLink(person)}
         </div>
-
       </div>
     `;
   }).join("") || `<p class="muted">Пользователи не найдены.</p>`;
 
+  await fillPresenceForProfiles($("peopleResults"), data || []);
   document.querySelectorAll("[data-add]").forEach(button => {
     button.addEventListener("click", () => {
       sendFriendRequest(button.dataset.add);
@@ -577,7 +642,6 @@ async function sendFriendRequest(id) {
   if (error) return say(error.message);
 
   say("Заявка в друзья отправлена.");
-
   await searchPeople();
 }
 
@@ -591,7 +655,6 @@ async function getAcceptedFriends() {
   const fields = `
     id,
     username,
-    status,
     avatar_url,
     avatar_emoji,
     handle,
@@ -655,7 +718,6 @@ async function loadFriends() {
 
     return `
       <div class="result-row">
-
         <div class="person-main">
           ${renderAvatarButton(person)}
 
@@ -681,7 +743,6 @@ async function loadFriends() {
             Отклонить
           </button>
         </span>
-
       </div>
     `;
   }).join("") || `<p class="muted">Новых заявок нет.</p>`;
@@ -702,7 +763,6 @@ async function loadFriends() {
 
   $("friendsList").innerHTML = friends.map(person => `
     <div class="result-row">
-
       <div class="person-main">
         ${renderAvatarButton(person)}
 
@@ -717,8 +777,8 @@ async function loadFriends() {
 
           <small class="muted">${profileHandle(person)}</small>
 
-          <small class="muted">
-            ${esc(person.status || "Статус не указан")}
+          <small class="muted" data-presence-for="${esc(person.id)}">
+            …
           </small>
         </div>
       </div>
@@ -730,18 +790,15 @@ async function loadFriends() {
       >
         Написать
       </button>
-
     </div>
   `).join("") || `<p class="muted">Пока нет друзей.</p>`;
+
+  await fillPresenceForProfiles($("friendsList"), friends);
 
   document.querySelectorAll("[data-open-chat]").forEach(button => {
     button.addEventListener("click", () => {
       showPage("messages");
-
-      openChat(
-        button.dataset.openChat,
-        button.dataset.openName
-      );
+      openChat(button.dataset.openChat, button.dataset.openName);
     });
   });
 }
@@ -793,10 +850,7 @@ async function loadMessageContacts() {
 
   document.querySelectorAll("[data-chat-id]").forEach(button => {
     button.addEventListener("click", () => {
-      openChat(
-        button.dataset.chatId,
-        button.dataset.chatName
-      );
+      openChat(button.dataset.chatId, button.dataset.chatName);
     });
   });
 }
@@ -809,14 +863,8 @@ async function openChat(friendId, friendName) {
     username: friendName
   };
 
-  $("chatHeader").innerHTML = `
-    <p class="muted">Загрузка профиля...</p>
-  `;
-
-  $("chatHistory").innerHTML = `
-    <p class="muted">Загрузка переписки...</p>
-  `;
-
+  $("chatHeader").innerHTML = `<p class="muted">Загрузка профиля...</p>`;
+  $("chatHistory").innerHTML = `<p class="muted">Загрузка переписки...</p>`;
   $("messageInput").disabled = false;
   $("messageSend").disabled = false;
 
@@ -826,7 +874,6 @@ async function openChat(friendId, friendName) {
       id,
       username,
       role,
-      status,
       handle,
       avatar_url,
       avatar_emoji,
@@ -844,6 +891,14 @@ async function openChat(friendId, friendName) {
 
   activeChatUser = friend;
 
+  const { data: chatPresence } = await supabase.rpc(
+    "visible_presence",
+    { target_user: friend.id }
+  );
+
+  friend.presence_mode = chatPresence;
+  $("messageInput").placeholder = "Написать " + friend.username + "!";
+
   $("chatHeader").innerHTML = `
     <button
       type="button"
@@ -855,14 +910,13 @@ async function openChat(friendId, friendName) {
 
       <span class="chat-header-info">
         <strong>${esc(friend.username)}</strong>
-        <small>${esc(friend.status || "Статус не указан")}</small>
+        <small>${esc(presenceLabel(friend.presence_mode))}</small>
       </span>
     </button>
   `;
 
   await loadMessageContacts();
   await loadChatMessages();
-
   $("messageInput").focus();
 }
 
@@ -889,9 +943,7 @@ async function loadChatMessages() {
     return;
   }
 
-  if (!activeChatUser || activeChatUser.id !== selectedFriendId) {
-    return;
-  }
+  if (!activeChatUser || activeChatUser.id !== selectedFriendId) return;
 
   $("chatHistory").innerHTML = (data || []).map(message => {
     const mine = message.sender_id === currentUser.id;
@@ -899,10 +951,7 @@ async function loadChatMessages() {
     return `
       <div class="chat-message ${mine ? "mine" : "theirs"}">
         ${esc(message.content)}
-
-        <span class="chat-time">
-          ${formatTime(message.created_at)}
-        </span>
+        <span class="chat-time">${formatTime(message.created_at)}</span>
       </div>
     `;
   }).join("") || `
@@ -920,7 +969,6 @@ $("messageForm")?.addEventListener("submit", async event => {
   if (!currentUser || !activeChatUser || sendingMessage) return;
 
   const content = $("messageInput").value.trim();
-
   if (!content) return;
 
   const receiverId = activeChatUser.id;
@@ -967,7 +1015,6 @@ function setupMessagesRealtime() {
 
   messagesChannel = supabase
     .channel("private-messages-" + currentUser.id)
-
     .on(
       "postgres_changes",
       {
@@ -979,22 +1026,25 @@ function setupMessagesRealtime() {
       async payload => {
         const newMessage = payload.new;
 
-        if (
-          activeChatUser &&
-          activeChatUser.id === newMessage.sender_id
-        ) {
+        if (activeChatUser && activeChatUser.id === newMessage.sender_id) {
           await loadChatMessages();
         } else {
           say("У тебя новое сообщение! Открой раздел «Сообщения».");
+          document.title = "Новое сообщение · TheAppleBook";
+
+          if (
+            document.hidden &&
+            "Notification" in window &&
+            Notification.permission === "granted"
+          ) {
+            new Notification("Новое сообщение", {
+              body: "Открой TheAppleBook, чтобы прочитать его."
+            });
+          }
         }
       }
     )
-
     .subscribe(status => {
-      if (status === "SUBSCRIBED") {
-        console.log("TheAppleBook: Realtime messages connected.");
-      }
-
       if (status === "CHANNEL_ERROR") {
         say("Не удалось подключить обновление сообщений в реальном времени.");
       }
@@ -1012,7 +1062,6 @@ function renderProfile() {
 
   $("profileDetails").innerHTML = `
     <div class="profile-public-header">
-
       ${renderAvatar(profile, "profile-large-avatar")}
 
       <div>
@@ -1023,12 +1072,11 @@ function renderProfile() {
 
         <p class="muted">${profileHandle(profile)}</p>
       </div>
-
     </div>
 
     <p>
       <strong>Статус:</strong>
-      ${esc(profile.status || "Не указано")}
+      ${esc(presenceLabel(currentPresenceMode))}
     </p>
 
     <p>
@@ -1048,361 +1096,3 @@ function renderProfile() {
 // =====================================
 // ОТКРЫТИЕ ПУБЛИЧНОГО ПРОФИЛЯ
 // =====================================
-
-async function openPublicProfile(id) {
-  if (!id || !currentUser) return;
-
-  if (id === currentUser.id) {
-    showPage("profile");
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select(`
-      id,
-      username,
-      role,
-      status,
-      bio,
-      created_at,
-      handle,
-      avatar_url,
-      avatar_emoji,
-      featured_achievement,
-      show_achievement
-    `)
-    .eq("id", id)
-    .single();
-
-  if (error || !data) {
-    say("Не удалось открыть профиль.");
-    return;
-  }
-
-  // Записываем просмотр профиля
-  const { error: viewError } = await supabase.rpc(
-    "record_profile_view",
-    {
-      target_profile_id: id
-    }
-  );
-
-  if (viewError) {
-    console.warn("Не удалось записать просмотр профиля:", viewError.message);
-  }
-
-  $("publicProfileModal")?.remove();
-
-  const modal = document.createElement("div");
-
-  modal.id = "publicProfileModal";
-  modal.className = "profile-modal";
-
-  modal.innerHTML = `
-    <div class="profile-modal-card">
-
-      <button
-        class="profile-modal-close"
-        type="button"
-        aria-label="Закрыть профиль"
-      >×</button>
-
-      ${renderAvatar(data, "profile-large-avatar")}
-
-      <h2>${esc(data.username)}</h2>
-
-      <span class="pill">
-        ${esc(roleLabel(data.role))}
-      </span>
-
-      <p class="muted">${profileHandle(data)}</p>
-
-      <div class="public-profile-info">
-
-        <div class="public-profile-item">
-          <strong>Статус</strong>
-          <span>${esc(data.status || "Не указан")}</span>
-        </div>
-
-        <div class="public-profile-item">
-          <strong>О себе</strong>
-          <span>${esc(data.bio || "Пока ничего не написано.")}</span>
-        </div>
-
-        <div class="public-profile-item">
-          <strong>Дата регистрации</strong>
-          <span>
-            ${data.created_at
-              ? new Date(data.created_at).toLocaleDateString("ru-RU")
-              : "Неизвестно"}
-          </span>
-        </div>
-
-      </div>
-
-    </div>
-  `;
-
-  document.body.appendChild(modal);
-
-  const closeModal = () => {
-    modal.remove();
-    document.removeEventListener("keydown", handleEscape);
-  };
-
-  const handleEscape = event => {
-    if (event.key === "Escape") {
-      closeModal();
-    }
-  };
-
-  modal.querySelector(".profile-modal-close").addEventListener("click", closeModal);
-
-  modal.addEventListener("click", event => {
-    if (event.target === modal) {
-      closeModal();
-    }
-  });
-
-  document.addEventListener("keydown", handleEscape);
-}
-
-// Единый обработчик для всех кнопок открытия профиля.
-
-document.addEventListener("click", event => {
-  const button = event.target.closest("[data-profile-open]");
-
-  if (!button) return;
-
-  event.preventDefault();
-  event.stopPropagation();
-
-  const profileId = button.dataset.profileOpen;
-
-  if (profileId) {
-    openPublicProfile(profileId);
-  }
-});
-
-// =====================================
-// НАСТРОЙКИ
-// =====================================
-
-function fillSettings() {
-  if (!currentProfile) return;
-
-  if ($("editName")) {
-    $("editName").value = currentProfile.username || "";
-  }
-
-  if ($("editStatus")) {
-    $("editStatus").value = currentProfile.status || "";
-  }
-
-  if ($("editBio")) {
-    $("editBio").value = currentProfile.bio || "";
-  }
-
-  if ($("themeSelect")) {
-    $("themeSelect").value =
-      localStorage.getItem("apple-theme") || "burgundy";
-  }
-}
-
-$("profileForm")?.addEventListener("submit", async event => {
-  event.preventDefault();
-
-  if (!currentUser) return;
-
-  const username = $("editName").value.trim();
-
-  if (username.length < 2) {
-    return say("Имя должно содержать минимум 2 символа.");
-  }
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      username,
-      status: $("editStatus").value || null,
-      bio: $("editBio").value.trim()
-    })
-    .eq("id", currentUser.id);
-
-  if (error) return say(error.message);
-
-  const { data: updatedProfile, error: profileError } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", currentUser.id)
-    .single();
-
-  if (profileError) return say(profileError.message);
-
-  currentProfile = updatedProfile;
-
-  if ($("myName")) $("myName").textContent = currentProfile.username;
-
-  if ($("topUser")) {
-    $("topUser").textContent =
-      currentProfile.username + " · " + roleLabel(currentProfile.role);
-  }
-
-  renderProfile();
-
-  window.dispatchEvent(new CustomEvent("theapplebook:profile-updated"));
-
-  say("Профиль сохранён.");
-});
-
-$("saveTheme")?.addEventListener("click", () => {
-  const theme = $("themeSelect").value;
-
-  localStorage.setItem("apple-theme", theme);
-
-  document.body.classList.toggle("dark", theme === "dark");
-  document.body.dataset.theme = theme;
-
-  say("Тема сохранена.");
-});
-
-// =====================================
-// ОБНОВЛЕНИЕ АВАТАРКИ ПОСЛЕ ИЗМЕНЕНИЯ
-// =====================================
-
-window.addEventListener("theapplebook:profile-updated", async () => {
-  if (!currentUser) return;
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", currentUser.id)
-    .single();
-
-  if (error || !data) return;
-
-  currentProfile = data;
-
-  if ($("myAvatar")) {
-    $("myAvatar").innerHTML = avatarContent(data);
-  }
-
-  if ($("myName")) {
-    $("myName").textContent = data.username;
-  }
-
-  if ($("myStatus")) {
-    $("myStatus").textContent = data.status || "Статус не указан";
-  }
-
-  renderProfile();
-
-  const activePage = document.querySelector(".page:not(.hidden)");
-
-  if (activePage?.id === "page-feed") await loadFeed();
-  if (activePage?.id === "page-friends") await loadFriends();
-  if (activePage?.id === "page-messages") await loadMessageContacts();
-});
-
-// =====================================
-// АДМИНИСТРИРОВАНИЕ
-// =====================================
-
-async function loadAdmin() {
-  if (!currentProfile || !$("adminContent")) return;
-
-  if (!["owner", "ceo", "deputy_ceo", "admin"].includes(currentProfile.role)) {
-    $("adminContent").textContent = "Недостаточно прав.";
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id,username,role,avatar_url,avatar_emoji,handle")
-    .order("username")
-    .limit(100);
-
-  if (error) return say(error.message);
-
-  const canManageTop = currentProfile.role === "owner";
-
-  $("adminContent").innerHTML = (data || []).map(person => {
-    const options = canManageTop
-      ? ["member", "moderator", "admin", "deputy_ceo", "ceo"]
-      : ["member", "moderator", "admin"];
-
-    const controls = person.role === "owner"
-      ? `<span class="pill">OWNER — защищён</span>`
-      : `
-        <select data-role-select="${esc(person.id)}">
-          ${options.map(role => `
-            <option value="${role}" ${role === person.role ? "selected" : ""}>
-              ${roleLabel(role)}
-            </option>
-          `).join("")}
-        </select>
-
-        <button class="secondary" data-role-save="${esc(person.id)}">
-          Сохранить
-        </button>
-      `;
-
-    return `
-      <div class="result-row">
-
-        <div class="person-main">
-          ${renderAvatarButton(person)}
-
-          <div class="user-info">
-            <button
-              type="button"
-              class="person-name-button"
-              data-profile-open="${esc(person.id)}"
-            >
-              ${esc(person.username)}
-            </button>
-
-            <small class="muted">${profileHandle(person)}</small>
-            <small class="muted">${esc(roleLabel(person.role))}</small>
-          </div>
-        </div>
-
-        <div>${controls}</div>
-
-      </div>
-    `;
-  }).join("");
-
-  document.querySelectorAll("[data-role-save]").forEach(button => {
-    button.addEventListener("click", async () => {
-      const id = button.dataset.roleSave;
-
-      const select = document.querySelector(
-        `[data-role-select="${id}"]`
-      );
-
-      if (!select) return;
-
-      const role = select.value;
-
-      const { error } = await supabase.rpc("admin_set_role", {
-        target_user_id: id,
-        new_role: role
-      });
-
-      if (error) return say(error.message);
-
-      say("Роль обновлена.");
-
-      await boot();
-      await loadAdmin();
-    });
-  });
-}
-
-// =====================================
-// ЗАПУСК
-// =====================================
-
-boot();
