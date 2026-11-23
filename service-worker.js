@@ -1,4 +1,4 @@
-const CACHE_NAME = "theapplebook-v6";
+const CACHE_NAME = "theapplebook-v7";
 
 const FILES_TO_CACHE = [
   "./",
@@ -13,7 +13,9 @@ const FILES_TO_CACHE = [
   "./extras.js",
   "./pwa.js",
   "./moderation.js",
-  "./manifest.json"
+  "./manifest.json",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png"
 ];
 
 // Установка новой версии
