@@ -691,32 +691,61 @@ label {
 }
 
 .chat-message {
-  max-width: 80%;
-  padding: 10px 13px;
-  border-radius: 9px;
+  /* Размер пузыря определяется содержимым, а не высотой окна чата. */
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  width: fit-content;
+  max-width: min(78%, 520px);
+  min-width: 52px;
+  min-height: 0;
+  height: auto;
+  padding: 9px 12px 7px;
+  border-radius: 15px;
   background: var(--pale);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-  line-height: 1.4;
+  line-height: 1.45;
+  font-size: 14px;
+  font-weight: 400;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+}
+
+.chat-message-text {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 400;
+  line-height: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .chat-message.mine {
   align-self: flex-end;
   background: var(--wine);
   color: white;
-  border-bottom-right-radius: 2px;
+  border-bottom-right-radius: 5px;
 }
 
 .chat-message.theirs {
   align-self: flex-start;
-  border-bottom-left-radius: 2px;
+  border-bottom-left-radius: 5px;
 }
 
 .chat-time {
   display: block;
+  align-self: flex-end;
   font-size: 10px;
+  font-weight: 400;
+  line-height: 1.2;
   margin-top: 5px;
-  opacity: 0.7;
+  opacity: 0.72;
+  white-space: nowrap;
 }
 
 /* MESSAGE FORM */
@@ -927,7 +956,7 @@ hr {
   }
 
   .chat-message {
-    max-width: 90%;
+    max-width: 88%;
   }
 
   .shell {
