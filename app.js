@@ -58,24 +58,29 @@ function presenceLabel(mode) {
 }
 
 async function fillPresenceForProfiles(container, profiles) {
-  await Promise.all((profiles || []).map(async person => {
-    const now = Date.now();
-    let cached = presenceCache.get(person.id);
-    if (!cached || cached.expiresAt <= now) {
-      const pending = supabase.rpc("visible_presence", { target_user: person.id })
-        .then(({ data, error }) => {
-          const value = error ? "hidden" : data;
-          presenceCache.set(person.id, { value, expiresAt: Date.now() + 15000 });
-          return value;
-        })
-        .catch(() => "hidden");
-      cached = { promise: pending, expiresAt: now + 15000 };
-      presenceCache.set(person.id, cached);
+  const people = profiles || [];
+  const now = Date.now();
+  const missing = people.filter(person => {
+    const cached = presenceCache.get(person.id);
+    return !cached || cached.expiresAt <= now;
+  });
+  if (missing.length) {
+    const { data, error } = await supabase.rpc("visible_presence_many", {
+      target_users: missing.map(person => person.id)
+    });
+    const values = new Map((data || []).map(row => [row.user_id, row.presence_mode]));
+    for (const person of missing) {
+      presenceCache.set(person.id, {
+        value: error ? "hidden" : (values.get(person.id) || "online"),
+        expiresAt: Date.now() + 15000
+      });
     }
-    const mode = cached.promise ? await cached.promise : cached.value;
+  }
+  for (const person of people) {
+    const mode = presenceCache.get(person.id)?.value || "hidden";
     const target = container?.querySelector(`[data-presence-for="${CSS.escape(person.id)}"]`);
     if (target) target.textContent = presenceLabel(mode);
-  }));
+  }
 }
 
 function formatTime(date) {
@@ -199,6 +204,110 @@ function switchAuth(tab) {
   say("", "authMessage");
 }
 
+let qrPollTimer = null;
+let qrPollBusy = false;
+let qrPollSecret = null;
+let qrImageUrl = null;
+
+function stopQrLogin(message = "") {
+  clearInterval(qrPollTimer);
+  qrPollTimer = null;
+  qrPollSecret = null;
+  if (qrImageUrl) URL.revokeObjectURL(qrImageUrl);
+  qrImageUrl = null;
+  $("qrLoginImage")?.classList.add("hidden");
+  $("qrLoginCode")?.classList.add("hidden");
+  if ($("qrLoginStatus") && message) $("qrLoginStatus").textContent = message;
+}
+
+async function pollQrLogin(challengeId) {
+  if (!qrPollSecret || qrPollBusy) return;
+  qrPollBusy = true;
+  try {
+    const { data, error } = await supabase.functions.invoke("qr-login-poll", {
+      body: { challenge_id: challengeId, poll_verifier: qrPollSecret }
+    });
+    if (error) throw error;
+    if (data?.status === "pending") return;
+    if (data?.status === "expired") {
+      stopQrLogin("Время действия QR-кода истекло. Создай новый код.");
+      return;
+    }
+    if (data?.status === "approved" && data?.token_hash) {
+      stopQrLogin("Вход подтверждён. Выполняю вход…");
+      const { error: authError } = await supabase.auth.verifyOtp({
+        token_hash: data.token_hash,
+        type: "magiclink"
+      });
+      if (authError) say("Не удалось завершить QR-вход: " + authError.message, "qrLoginStatus");
+      return;
+    }
+    if (data?.status === "consumed") stopQrLogin("Этот QR-код уже использован. Создай новый.");
+    if (data?.status === "invalid") stopQrLogin("Запрос входа недействителен. Создай новый QR-код.");
+  } catch (error) {
+    stopQrLogin("Не удалось проверить вход: " + (error?.message || "ошибка соединения"));
+  } finally {
+    qrPollBusy = false;
+  }
+}
+
+$("startQrLogin")?.addEventListener("click", async () => {
+  stopQrLogin();
+  $("qrLoginPanel")?.classList.remove("hidden");
+  $("qrLoginStatus").textContent = "Создаю одноразовый QR-код…";
+  $("startQrLogin").disabled = true;
+  try {
+    const { data, error } = await supabase.functions.invoke("qr-login-create", { body: {} });
+    if (error) throw error;
+    if (!data?.challenge_id || !data?.poll_verifier || !data?.qr_svg || !data?.display_code) throw new Error("Сервер вернул неполный ответ.");
+    qrPollSecret = data.poll_verifier;
+    qrImageUrl = URL.createObjectURL(new Blob([data.qr_svg], { type: "image/svg+xml" }));
+    $("qrLoginImage").src = qrImageUrl;
+    $("qrLoginImage").classList.remove("hidden");
+    $("qrLoginCode").textContent = "Код подтверждения: " + data.display_code;
+    $("qrLoginCode").classList.remove("hidden");
+    $("qrLoginStatus").textContent = "Ожидаю подтверждения на твоём устройстве…";
+    await pollQrLogin(data.challenge_id);
+    if (qrPollSecret) qrPollTimer = setInterval(() => pollQrLogin(data.challenge_id), 1800);
+  } catch (error) {
+    stopQrLogin("Не удалось создать QR-вход: " + (error?.message || "ошибка сервера"));
+  } finally {
+    $("startQrLogin").disabled = false;
+  }
+});
+
+$("cancelQrLogin")?.addEventListener("click", () => {
+  stopQrLogin("Вход отменён.");
+  $("qrLoginPanel")?.classList.add("hidden");
+});
+
+function readQrApproval() {
+  const values = new URLSearchParams(location.hash.slice(1));
+  const challengeId = values.get("qr");
+  const verifier = values.get("v");
+  const code = values.get("c");
+  return challengeId && verifier && code ? { challengeId, verifier, code } : null;
+}
+
+function clearQrApprovalHash() {
+  history.replaceState(null, "", location.pathname + location.search);
+}
+
+async function approveQrLoginIfPresent() {
+  const approval = readQrApproval();
+  if (!approval || !currentUser) return;
+  if (!confirm(`Разрешить вход на другом устройстве? Сверь код ${approval.code} с кодом на экране, где создан QR. Подтверждай только при совпадении.`)) {
+    clearQrApprovalHash();
+    return;
+  }
+  const { error } = await supabase.rpc("approve_qr_login", {
+    challenge_id: approval.challengeId,
+    verifier: approval.verifier
+  });
+  clearQrApprovalHash();
+  say(error ? "QR-запрос истёк или уже использован." : "Вход подтверждён на другом устройстве.");
+}
+
 document.querySelectorAll(".tab").forEach(button => {
   button.addEventListener("click", () => switchAuth(button.dataset.tab));
 });
@@ -293,6 +402,10 @@ async function boot() {
 
       $("authView")?.classList.remove("hidden");
       $("appView")?.classList.add("hidden");
+      if (readQrApproval()) {
+        clearQrApprovalHash();
+        say("На этом устройстве сначала войди в аккаунт, затем отсканируй QR-код ещё раз.", "authMessage");
+      }
 
       return;
     }
@@ -349,6 +462,8 @@ async function boot() {
     document.body.dataset.theme = theme;
 
     setupMessagesRealtime();
+
+    await approveQrLoginIfPresent();
 
     showPage("feed");
 
@@ -984,12 +1099,45 @@ async function loadChatMessages() {
     return;
   }
 
+  const messageIds = (data || []).map(message => message.id);
+  let attachmentsByMessage = new Map();
+  if (messageIds.length) {
+    const { data: attachments } = await supabase
+      .from("message_attachments")
+      .select("message_id,storage_path,file_name,mime_type")
+      .in("message_id", messageIds);
+    attachmentsByMessage = new Map();
+    const signedAttachments = await Promise.all((attachments || []).map(async attachment => {
+      const { data: signed } = await supabase.storage
+        .from("message-files")
+        .createSignedUrl(attachment.storage_path, 600);
+      return signed?.signedUrl ? { ...attachment, url: signed.signedUrl } : null;
+    }));
+    for (const attachment of signedAttachments) {
+      if (!attachment) continue;
+      const items = attachmentsByMessage.get(attachment.message_id) || [];
+      items.push(attachment);
+      attachmentsByMessage.set(attachment.message_id, items);
+    }
+  }
+
+  if (!activeChatUser || activeChatUser.id !== selectedFriendId) return;
+
   $("chatHistory").innerHTML = (data || []).map(message => {
     const mine = message.sender_id === currentUser.id;
+    const attached = (attachmentsByMessage.get(message.id) || []).map(file => {
+      const name = esc(file.file_name);
+      const url = esc(file.url);
+      if (file.mime_type.startsWith("image/")) return `<a class="message-attachment" href="${url}" target="_blank" rel="noopener"><img src="${url}" alt="${name}" loading="lazy"></a>`;
+      if (file.mime_type.startsWith("video/")) return `<video class="message-attachment" src="${url}" controls preload="metadata" aria-label="${name}"></video>`;
+      if (file.mime_type.startsWith("audio/")) return `<audio class="message-attachment" src="${url}" controls preload="metadata" aria-label="${name}"></audio>`;
+      return `<a class="message-file-link" href="${url}" target="_blank" rel="noopener" download="${name}">📎 ${name}</a>`;
+    }).join("");
 
     return `
       <div class="chat-message ${mine ? "mine" : "theirs"}">
-        ${esc(message.content)}
+        <div>${esc(message.content)}</div>
+        ${attached}
 
         <span class="chat-time">
           ${formatTime(message.created_at)}
@@ -1004,6 +1152,154 @@ async function loadChatMessages() {
 
   $("chatHistory").scrollTop = $("chatHistory").scrollHeight;
 }
+
+const MESSAGE_FILE_TYPES = new Set([
+  "image/jpeg", "image/png", "image/webp", "image/gif",
+  "video/mp4", "video/webm", "audio/webm", "audio/mp4",
+  "application/pdf", "text/plain"
+]);
+
+async function sendMessageAttachment(file, messageText = "") {
+  if (!currentUser || !activeChatUser || sendingMessage) return;
+  const mimeType = (file?.type || "").split(";")[0].trim().toLowerCase();
+  if (!file || !MESSAGE_FILE_TYPES.has(mimeType)) {
+    say("Этот формат файла не поддерживается.");
+    return;
+  }
+  if (file.size < 1 || file.size > 10 * 1024 * 1024) {
+    say("Файл должен быть размером не более 10 МБ.");
+    return;
+  }
+
+  const recipientId = activeChatUser.id;
+  const messageId = crypto.randomUUID();
+  const safeName = (file.name || "voice-message").replace(/[\\/\u0000-\u001f]/g, "_").slice(0, 150);
+  const storagePath = `${currentUser.id}/${messageId}/${crypto.randomUUID()}-${safeName}`;
+  const content = (messageText || `Вложение: ${safeName}`).slice(0, 2000);
+  sendingMessage = true;
+  $("messageSend").disabled = true;
+  $("attachMessageButton").disabled = true;
+  $("voiceRecordButton").disabled = true;
+
+  const { error: uploadError } = await supabase.storage
+    .from("message-files")
+    .upload(storagePath, file, { contentType: mimeType, upsert: false });
+  if (uploadError) {
+    say("Не удалось загрузить файл: " + uploadError.message);
+    sendingMessage = false;
+    $("messageSend").disabled = false;
+    $("attachMessageButton").disabled = false;
+    $("voiceRecordButton").disabled = false;
+    return;
+  }
+
+  const { error: messageError } = await supabase.from("messages").insert({
+    id: messageId, sender_id: currentUser.id, receiver_id: recipientId, content
+  });
+  if (messageError) {
+    await supabase.storage.from("message-files").remove([storagePath]);
+    say("Не удалось отправить сообщение: " + messageError.message);
+  } else {
+    const { error: metadataError } = await supabase.from("message_attachments").insert({
+      message_id: messageId, sender_id: currentUser.id, storage_path: storagePath,
+      file_name: safeName, mime_type: mimeType, file_size: file.size
+    });
+    if (metadataError) {
+      await supabase.storage.from("message-files").remove([storagePath]);
+      say("Файл не удалось прикрепить: " + metadataError.message);
+    }
+    if (activeChatUser?.id === recipientId) await loadChatMessages();
+  }
+
+  sendingMessage = false;
+  $("messageSend").disabled = false;
+  $("attachMessageButton").disabled = false;
+  $("voiceRecordButton").disabled = false;
+}
+
+$("attachMessageButton")?.addEventListener("click", () => $("messageFileInput")?.click());
+$("messageFileInput")?.addEventListener("change", async event => {
+  const file = event.target.files?.[0];
+  if (file) await sendMessageAttachment(file);
+  event.target.value = "";
+});
+
+$("emojiToggle")?.addEventListener("click", () => $("messageEmojiPicker")?.classList.toggle("hidden"));
+document.querySelectorAll("[data-message-emoji]").forEach(button => {
+  button.addEventListener("click", () => {
+    const input = $("messageInput");
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? start;
+    const emoji = button.dataset.messageEmoji;
+    input.value = input.value.slice(0, start) + emoji + input.value.slice(end);
+    input.focus();
+    input.setSelectionRange(start + emoji.length, start + emoji.length);
+    $("messageEmojiPicker").classList.add("hidden");
+  });
+});
+
+let activeRecorder = null;
+let voiceChunks = [];
+let voiceBytes = 0;
+let voiceStopTimer = null;
+$("voiceRecordButton")?.addEventListener("click", async () => {
+  const button = $("voiceRecordButton");
+  if (activeRecorder?.state === "recording") {
+    activeRecorder.stop();
+    button.textContent = "🎙️";
+    $("voiceRecordStatus").textContent = "Сохраняю запись…";
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    say("Запись голоса не поддерживается этим браузером.");
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mimeType = ["audio/webm", "audio/mp4"].find(type => MediaRecorder.isTypeSupported(type));
+    if (!mimeType) {
+      stream.getTracks().forEach(track => track.stop());
+      say("Этот браузер не поддерживает безопасный формат голосовой записи.");
+      return;
+    }
+    activeRecorder = new MediaRecorder(stream, { mimeType });
+    voiceChunks = [];
+    voiceBytes = 0;
+    activeRecorder.ondataavailable = event => {
+      if (!event.data.size) return;
+      voiceBytes += event.data.size;
+      voiceChunks.push(event.data);
+      if (voiceBytes > 10 * 1024 * 1024 && activeRecorder.state === "recording") {
+        $("voiceRecordStatus").textContent = "Достигнут лимит 10 МБ…";
+        activeRecorder.stop();
+      }
+    };
+    activeRecorder.onstop = async () => {
+      clearTimeout(voiceStopTimer);
+      stream.getTracks().forEach(track => track.stop());
+      const recordingMimeType = (activeRecorder.mimeType || "audio/webm").split(";")[0];
+      const blob = new Blob(voiceChunks, { type: recordingMimeType });
+      $("voiceRecordStatus").textContent = "";
+      if (blob.size > 10 * 1024 * 1024) {
+        say("Запись больше 10 МБ и не была отправлена.");
+        return;
+      }
+      const extension = blob.type.includes("mp4") ? "m4a" : "webm";
+      await sendMessageAttachment(new File([blob], `voice-${Date.now()}.${extension}`, { type: blob.type }), "Голосовое сообщение");
+    };
+    activeRecorder.start(1000);
+    voiceStopTimer = setTimeout(() => {
+      if (activeRecorder?.state === "recording") {
+        $("voiceRecordStatus").textContent = "Максимум 2 минуты…";
+        activeRecorder.stop();
+      }
+    }, 120000);
+    button.textContent = "⏹️";
+    $("voiceRecordStatus").textContent = "Идёт запись · нажми ещё раз, чтобы отправить";
+  } catch (error) {
+    say("Не удалось получить доступ к микрофону: " + (error?.message || "проверь разрешение браузера"));
+  }
+});
 
 $("messageForm")?.addEventListener("submit", async event => {
   event.preventDefault();
