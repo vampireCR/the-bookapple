@@ -3,7 +3,16 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const SUPABASE_URL = "https://tzkxujrjrhyqxgzytaex.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_BrNnF8XCshRm1NmEYvQphg_hcNIJhQV";
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+// Каждый браузер/устройство хранит собственную локальную сессию.
+// Это позволяет входить в один аккаунт с нескольких устройств одновременно.
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: window.localStorage
+  }
+});
 const $ = id => document.getElementById(id);
 
 let currentUser = null;
@@ -1143,7 +1152,7 @@ async function loadChatMessages() {
 
     return `
       <div class="chat-message ${mine ? "mine" : "theirs"}">
-        <div>${esc(message.content)}</div>
+        <div class="chat-message-text">${esc(message.content)}</div>
         ${attached}
 
         <span class="chat-time">
