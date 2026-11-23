@@ -1,0 +1,8 @@
+[functions.qr-login-create]
+verify_jwt = false
+
+[functions.qr-login-poll]
+verify_jwt = false
+
+[functions.delete-account]
+verify_jwt = true
