@@ -73,7 +73,6 @@
       <div class="layout">
 
         <aside class="sidebar">
-
           <div class="panel profile-mini">
             <div class="cover"></div>
             <div class="avatar" id="myAvatar">?</div>
@@ -84,6 +83,8 @@
 
           <nav class="panel nav">
             <button data-page="feed" class="nav-btn active">🏠 Лента</button>
+            <button data-page="notes" class="nav-btn">📝 Notes</button>
+            <button data-page="gifts" class="nav-btn">🎁 Подарки</button>
             <button data-page="people" class="nav-btn">🔎 Поиск людей</button>
             <button data-page="friends" class="nav-btn">👥 Друзья</button>
             <button data-page="messages" class="nav-btn">💬 Сообщения</button>
@@ -91,9 +92,9 @@
             <button data-page="app" class="nav-btn">📱 Приложение</button>
             <button data-page="admin" id="adminNav" class="nav-btn hidden">👑 Управление</button>
             <button data-page="settings" class="nav-btn">⚙ Настройки</button>
+            <button data-page="help" class="nav-btn">❔ Help</button>
             <button id="logoutBtn" class="nav-btn">↪ Выйти</button>
           </nav>
-
         </aside>
 
         <section class="maincol">
@@ -107,11 +108,9 @@
 
             <div class="panel pad">
               <h2>Создать публикацию</h2>
-
               <form id="postForm">
                 <textarea id="postText" maxlength="2000" rows="3"
                   placeholder="О чём думаешь?" required></textarea>
-
                 <button class="primary">Опубликовать</button>
               </form>
             </div>
@@ -119,9 +118,62 @@
             <div id="feedList"></div>
           </section>
 
+          <!-- ЛИЧНЫЕ NOTES -->
+          <section class="page hidden" id="page-notes">
+            <div class="panel pad">
+              <h1>📝 Личные Notes</h1>
+              <p class="muted">Записи доступны только вашему аккаунту.</p>
+              <form id="noteForm">
+                <label>Новая запись
+                  <textarea id="noteBody" maxlength="10000" rows="4" required></textarea>
+                </label>
+                <button class="primary">Сохранить</button>
+              </form>
+              <div id="notesList"></div>
+            </div>
+          </section>
+
+          <!-- ПОДАРКИ И ТОКЕНЫ -->
+          <section class="page hidden" id="page-gifts">
+            <div class="panel pad">
+              <h1>🎁 Подарки и токены</h1>
+              <p id="walletBalance" class="pill">Баланс загружается…</p>
+              <button id="claimDailyTokens" class="primary" type="button">
+                Получить ежедневные 250 токенов
+              </button>
+              <p id="giftMessage" class="notice" aria-live="polite"></p>
+              <label>Ник получателя
+                <input id="giftRecipient" maxlength="32" placeholder="Имя пользователя">
+              </label>
+              <div id="giftCatalog" class="gift-grid"></div>
+              <h3>История операций</h3>
+              <div id="tokenHistory"></div>
+            </div>
+          </section>
+
+          <!-- HELP -->
+          <section class="page hidden" id="page-help">
+            <div class="panel pad">
+              <h1>Help и правила</h1>
+
+              <h3>Аккаунт и безопасность</h3>
+              <p>Используйте уникальное имя, надёжный пароль и подтверждённую почту. Никогда не делитесь кодами входа. Видимость телефона и даты рождения настраивается отдельно.</p>
+
+              <h3>Общение</h3>
+              <p>Добавляйте друзей, отправляйте личные сообщения, делитесь публикациями и подарками. Жалобы и вопросы по ограничениям направляйте администрации; решения должны иметь объяснение и возможность апелляции.</p>
+
+              <h3>Приватность</h3>
+              <p>Notes видны только вам. Невидимый режим скрывает присутствие, а спящий режим показывает, что вы отошли. Не публикуйте чужие личные данные без согласия.</p>
+
+              <h3>Правила и поведение на сайте</h3>
+              <p>Запрещены травля, угрозы, мошенничество, спам, публикация чужих личных данных и незаконный контент. Модерация должна быть соразмерной, объяснимой и доступной для обжалования.</p>
+            </div>
+          </section>
+
           <!-- ПОИСК -->
           <section class="page hidden" id="page-people">
             <div class="panel pad">
+              <p id="peopleWelcome" class="muted"></p>
               <h2>Поиск пользователей</h2>
               <input id="peopleSearch" placeholder="Введи имя пользователя">
               <div id="peopleResults" class="results"></div>
@@ -148,10 +200,8 @@
               <p class="muted">Твоя личная переписка с друзьями.</p>
 
               <div class="messages-layout">
-
                 <div class="messages-contacts">
                   <h3>Мои друзья</h3>
-
                   <div id="messageContacts">
                     <p class="muted">Загрузка друзей...</p>
                   </div>
@@ -169,20 +219,17 @@
                   <form id="messageForm" class="message-form">
                     <textarea id="messageInput" rows="2" maxlength="2000"
                       placeholder="Напиши сообщение..." autocomplete="off" disabled></textarea>
-
                     <button id="messageSend" class="primary" type="submit" disabled>
                       Отправить
                     </button>
                   </form>
                 </div>
-
               </div>
             </div>
           </section>
 
           <!-- ПРОФИЛЬ -->
           <section class="page hidden" id="page-profile">
-
             <div class="panel pad">
               <h2>Мой профиль</h2>
               <div id="profileDetails"></div>
@@ -195,7 +242,6 @@
                   <h2>🏆 Мои достижения</h2>
                   <p class="muted">Твоя история в TheAppleBook.</p>
                 </div>
-
                 <span id="achievementCount" class="pill">0 достижений</span>
               </div>
 
@@ -207,12 +253,10 @@
                 Нажми на звёздочку, чтобы выбрать награды для показа.
               </p>
             </div>
-
           </section>
 
           <!-- ПРИЛОЖЕНИЕ -->
           <section class="page hidden" id="page-app">
-
             <div class="hero app-hero">
               <h1>📱 TheAppleBook App</h1>
               <p>Твоя социальная сеть всегда под рукой.</p>
@@ -220,7 +264,6 @@
 
             <div class="panel pad">
               <h2>Установить TheAppleBook</h2>
-
               <p class="muted">
                 Установи TheAppleBook на своё устройство и запускай
                 его отдельно от браузера.
@@ -228,7 +271,6 @@
 
               <div class="app-install-card">
                 <div class="app-install-icon">🍎</div>
-
                 <div>
                   <h3>TheAppleBook</h3>
                   <p class="muted tiny">Официальное веб-приложение</p>
@@ -279,7 +321,6 @@
                 </div>
               </div>
             </div>
-
           </section>
 
           <!-- УПРАВЛЕНИЕ -->
@@ -293,7 +334,6 @@
 
           <!-- НАСТРОЙКИ -->
           <section class="page hidden" id="page-settings">
-
             <div class="panel pad">
               <h2>Настройки профиля</h2>
 
@@ -302,10 +342,11 @@
                   <input id="editName" maxlength="32" required>
                 </label>
 
-                <label>Статус
+                <label>Статус присутствия
                   <select id="editStatus">
-                    <option value="">Не указано</option>
-                    <option value="Интересуюсь">Интересуюсь</option>
+                    <option value="online">В сети</option>
+                    <option value="invisible">Невидимый</option>
+                    <option value="sleep">Спящий режим</option>
                   </select>
                 </label>
 
@@ -318,11 +359,75 @@
             </div>
 
             <div class="panel pad">
+              <h2>Аккаунт и приватность</h2>
+
+              <details>
+                <summary>Конфиденциальность</summary>
+                <p>Notes доступны только вам. Телефон и дата рождения хранятся отдельно с персональной видимостью. Режим «Невидимый» не раскрывается другим пользователям.</p>
+              </details>
+
+              <details>
+                <summary>Правила и поведение на сайте</summary>
+                <p>Запрещены травля, угрозы, мошенничество, спам, публикация чужих личных данных и незаконный контент. Ограничения должны иметь объяснение и возможность апелляции.</p>
+              </details>
+
+              <label>Телефон
+                <input id="phoneInput" type="tel" autocomplete="tel" maxlength="30">
+              </label>
+              <label>
+                <input id="phoneVisible" type="checkbox">
+                Показывать номер в профиле
+              </label>
+
+              <label>Дата рождения
+                <input id="birthDateInput" type="date">
+              </label>
+              <label>
+                <input id="birthDateVisible" type="checkbox">
+                Показывать возраст (по умолчанию выключено)
+              </label>
+
+              <button id="savePrivateProfile" class="secondary" type="button">
+                Сохранить приватные данные
+              </button>
+
+              <hr>
+              <h3>Смена email и пароля</h3>
+
+              <label>Новый email
+                <input id="newEmail" type="email" autocomplete="email">
+              </label>
+              <button id="changeEmail" class="secondary" type="button">Изменить email</button>
+
+              <label>Новый пароль
+                <input id="newPassword" type="password" minlength="8" autocomplete="new-password">
+              </label>
+              <button id="changePassword" class="secondary" type="button">Изменить пароль</button>
+
+              <p id="accountSettingsMessage" class="notice" aria-live="polite"></p>
+
+              <hr>
+              <h3>Состояние аккаунта</h3>
+              <p id="accountStanding" class="muted"></p>
+
+              <button id="deactivateAccount" class="secondary" type="button">
+                Временно отключить аккаунт
+              </button>
+              <button id="reactivateAccount" class="secondary hidden" type="button">
+                Повторно активировать
+              </button>
+
+              <p class="tiny muted">
+                Удаление аккаунта необратимо и выполняется через защищённую серверную функцию после подтверждения.
+              </p>
+              <button id="deleteAccount" class="danger" type="button">Удалить аккаунт</button>
+            </div>
+
+            <div class="panel pad">
               <h2>🖼️ Оформление профиля</h2>
 
               <div class="profile-editor-avatar">
                 <div id="avatarPreview" class="avatar-preview">?</div>
-
                 <div>
                   <strong>Твоя аватарка</strong>
                   <p class="muted tiny">Фотография или эмодзи.</p>
@@ -333,16 +438,13 @@
                 <input type="file" id="avatarFile" accept="image/png,image/jpeg,image/webp">
               </label>
 
-              <p class="tiny muted">
-                Максимальный размер — 3 МБ. Форматы PNG, JPG, WebP.
-              </p>
+              <p class="tiny muted">Максимальный размер — 3 МБ. Форматы PNG, JPG, WebP.</p>
 
               <button id="uploadAvatar" class="primary" type="button">
                 Загрузить аватар
               </button>
 
               <hr>
-
               <h3>Или выбери эмодзи</h3>
 
               <div id="emojiPicker" class="emoji-picker">
@@ -360,12 +462,9 @@
                 <button type="button" data-emoji="🌹">🌹</button>
               </div>
 
-              <button id="saveEmoji" class="secondary" type="button">
-                Сохранить эмодзи
-              </button>
+              <button id="saveEmoji" class="secondary" type="button">Сохранить эмодзи</button>
 
               <hr>
-
               <h3>Уникальное имя</h3>
               <p class="muted tiny">Твой персональный ник в TheAppleBook.</p>
 
@@ -376,35 +475,25 @@
                 </div>
               </label>
 
-              <button id="saveHandle" class="primary" type="button">
-                Сохранить ник
-              </button>
-
+              <button id="saveHandle" class="primary" type="button">Сохранить ник</button>
               <p id="profileSettingsMessage" class="notice" aria-live="polite"></p>
             </div>
 
             <div class="panel pad">
               <h3>Внешний вид</h3>
-
               <label>Тема
                 <select id="themeSelect">
                   <option value="burgundy">Бордовая классика</option>
                   <option value="dark">Тёмная</option>
                 </select>
               </label>
-
-              <button id="saveTheme" class="secondary">
-                Сохранить тему
-              </button>
+              <button id="saveTheme" class="secondary">Сохранить тему</button>
             </div>
-
           </section>
-
         </section>
 
         <!-- ПРАВАЯ КОЛОНКА -->
         <aside class="rightcol">
-
           <div class="panel pad">
             <h3>О TheAppleBook</h3>
             <p class="muted">Основан 22 ноября 2026</p>
@@ -419,14 +508,12 @@
             <button class="link-btn" data-go="messages">Сообщения →</button>
             <button class="link-btn" data-go="app">Приложение →</button>
           </div>
-
         </aside>
 
       </div>
     </section>
 
     <p id="globalMessage" class="global-message" aria-live="polite"></p>
-
   </main>
 
   <footer>TheAppleBook © 2026 · Founded by Viktor Serbin</footer>
@@ -437,6 +524,5 @@
   <script type="module" src="extras.js"></script>
   <script type="module" src="pwa.js"></script>
   <script type="module" src="moderation.js"></script>
-
 </body>
 </html>
