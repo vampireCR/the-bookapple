@@ -424,6 +424,13 @@ async function boot() {
     }
 
     currentProfile = profile;
+    const { data: privateProfile } = await supabase
+      .from("profile_private")
+      .select("presence_mode")
+      .eq("user_id", currentUser.id)
+      .maybeSingle();
+    currentPresenceMode = privateProfile?.presence_mode || "online";
+    if (typeof updateStaffBonusVisibility === "function") updateStaffBonusVisibility();
 
     $("authView")?.classList.add("hidden");
     $("appView")?.classList.remove("hidden");
@@ -453,7 +460,7 @@ async function boot() {
 
     $("adminNav")?.classList.toggle(
       "hidden",
-      !["owner", "ceo", "deputy_ceo", "admin"].includes(profile.role)
+      !["owner", "ceo", "deputy_ceo", "admin", "moderator"].includes(profile.role)
     );
 
     const theme = localStorage.getItem("apple-theme") || "burgundy";
@@ -1217,11 +1224,62 @@ async function sendMessageAttachment(file, messageText = "") {
   $("voiceRecordButton").disabled = false;
 }
 
+let pendingMessageFile = null;
+let pendingMessagePreviewUrl = null;
+
+function clearPendingMessageFile() {
+  pendingMessageFile = null;
+  if (pendingMessagePreviewUrl) URL.revokeObjectURL(pendingMessagePreviewUrl);
+  pendingMessagePreviewUrl = null;
+  $("messageAttachmentPreview")?.classList.add("hidden");
+  $("messageAttachmentPreviewContent")?.replaceChildren();
+  if ($("messageFileInput")) $("messageFileInput").value = "";
+}
+
 $("attachMessageButton")?.addEventListener("click", () => $("messageFileInput")?.click());
-$("messageFileInput")?.addEventListener("change", async event => {
+$("messageFileInput")?.addEventListener("change", event => {
   const file = event.target.files?.[0];
-  if (file) await sendMessageAttachment(file);
-  event.target.value = "";
+  if (!file) return;
+  const mimeType = (file.type || "").toLowerCase();
+  if (!MESSAGE_FILE_TYPES.has(mimeType)) {
+    say("Этот формат файла не поддерживается.");
+    clearPendingMessageFile();
+    return;
+  }
+  if (file.size < 1 || file.size > 10 * 1024 * 1024) {
+    say("Файл должен быть размером не более 10 МБ.");
+    clearPendingMessageFile();
+    return;
+  }
+  clearPendingMessageFile();
+  pendingMessageFile = file;
+  const content = $("messageAttachmentPreviewContent");
+  const title = document.createElement("p");
+  title.textContent = `${file.name} · ${(file.size / 1024 / 1024).toFixed(2)} МБ`;
+  content.append(title);
+  if (mimeType.startsWith("image/")) {
+    pendingMessagePreviewUrl = URL.createObjectURL(file);
+    const image = document.createElement("img");
+    image.src = pendingMessagePreviewUrl;
+    image.alt = "Предпросмотр изображения";
+    image.className = "attachment-image-preview";
+    content.prepend(image);
+  } else if (mimeType.startsWith("video/")) {
+    pendingMessagePreviewUrl = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.src = pendingMessagePreviewUrl;
+    video.controls = true;
+    video.className = "attachment-video-preview";
+    content.prepend(video);
+  }
+  $("messageAttachmentPreview")?.classList.remove("hidden");
+});
+$("cancelPendingAttachment")?.addEventListener("click", clearPendingMessageFile);
+$("sendPendingAttachment")?.addEventListener("click", async () => {
+  if (!pendingMessageFile) return;
+  const file = pendingMessageFile;
+  clearPendingMessageFile();
+  await sendMessageAttachment(file);
 });
 
 $("emojiToggle")?.addEventListener("click", () => $("messageEmojiPicker")?.classList.toggle("hidden"));
@@ -1371,6 +1429,10 @@ function setupMessagesRealtime() {
           activeChatUser.id === newMessage.sender_id
         ) {
           await loadChatMessages();
+          // Attachments metadata is inserted immediately after the message row.
+          setTimeout(() => {
+            if (activeChatUser?.id === newMessage.sender_id) loadChatMessages();
+          }, 700);
         } else {
           say("У тебя новое сообщение! Открой раздел «Сообщения».");
           document.title = "Новое сообщение · TheAppleBook";
@@ -1882,13 +1944,23 @@ async function loadNotes() {
     const card = document.createElement("article");
     card.className = "panel pad";
     const body = document.createElement("p"); body.textContent = note.body;
+    const edit = document.createElement("button"); edit.type = "button"; edit.textContent = "Изменить";
+    edit.addEventListener("click", async () => {
+      const updated = prompt("Изменить заметку", note.body);
+      if (updated === null) return;
+      const value = updated.trim();
+      if (!value) return say("Заметка не может быть пустой.");
+      const result = await supabase.from("notes").update({ body: value }).eq("id", note.id);
+      if (result.error) return say(result.error.message);
+      await loadNotes();
+    });
     const del = document.createElement("button"); del.type = "button"; del.textContent = "Удалить";
     del.addEventListener("click", async () => {
       const result = await supabase.from("notes").delete().eq("id", note.id);
       if (result.error) return say(result.error.message);
       await loadNotes();
     });
-    card.append(body, del); list.append(card);
+    card.append(body, edit, del); list.append(card);
   }
 }
 $("noteForm")?.addEventListener("submit", async event => {
@@ -1943,5 +2015,31 @@ async function loadGiftShop() {
 $("claimDailyTokens")?.addEventListener("click", async () => {
   const { data, error } = await supabase.rpc("claim_daily_tokens");
   $("giftMessage").textContent = error ? error.message : "Ежедневные 250 токенов начислены.";
+  if (!error) await loadGiftShop();
+});
+
+// Ежедневный бонус персонала доступен только ролям выше MEMBER.
+// Проверка прав дополнительно выполняется на стороне базы данных.
+const staffBonusButton = document.createElement("button");
+staffBonusButton.id = "claimStaffTokens";
+staffBonusButton.type = "button";
+staffBonusButton.className = "secondary";
+staffBonusButton.textContent = "Получить ежедневный бонус персонала";
+staffBonusButton.hidden = true;
+$("claimDailyTokens")?.insertAdjacentElement("afterend", staffBonusButton);
+
+function updateStaffBonusVisibility() {
+  staffBonusButton.hidden = !currentProfile || !isStaff(currentProfile.role);
+}
+updateStaffBonusVisibility();
+window.addEventListener("theapplebook:profile-updated", updateStaffBonusVisibility);
+staffBonusButton.addEventListener("click", async () => {
+  if (!currentUser || !isStaff(currentProfile?.role)) return;
+  staffBonusButton.disabled = true;
+  const { error } = await supabase.rpc("admin_grant_self_tokens");
+  $("giftMessage").textContent = error
+    ? "Бонус не начислен: " + error.message
+    : "Бонус персонала начислен.";
+  staffBonusButton.disabled = false;
   if (!error) await loadGiftShop();
 });
