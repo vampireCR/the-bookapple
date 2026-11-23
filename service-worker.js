@@ -1,4 +1,4 @@
-const CACHE_NAME = "theapplebook-v5";
+const CACHE_NAME = "theapplebook-v6";
 
 const FILES_TO_CACHE = [
   "./",
