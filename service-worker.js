@@ -1,4 +1,4 @@
-const CACHE_NAME = "theapplebook-v3";
+const CACHE_NAME = "theapplebook-v4";
 
 const FILES_TO_CACHE = [
   "./",
@@ -63,38 +63,34 @@ self.addEventListener("fetch", event => {
   if (url.origin !== self.location.origin) return;
 
   event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        if (response && response.ok) {
-          const copy = response.clone();
-
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, copy);
-          });
+    (async () => {
+      const cached = await caches.match(event.request);
+      const refresh = fetch(event.request).then(async response => {
+        if (response?.ok) {
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put(event.request, response.clone());
         }
-
         return response;
-      })
-      .catch(async () => {
-        const cached = await caches.match(event.request);
+      });
 
-        if (cached) return cached;
+      if (cached) {
+        event.waitUntil(refresh.catch(() => {}));
+        return cached;
+      }
 
+      try {
+        return await refresh;
+      } catch {
         if (event.request.mode === "navigate") {
           const fallback = await caches.match("./index.html");
-
           if (fallback) return fallback;
         }
 
-        return new Response(
-          "Нет подключения к интернету",
-          {
-            status: 503,
-            headers: {
-              "Content-Type": "text/plain; charset=utf-8"
-            }
-          }
-        );
-      })
+        return new Response("Нет подключения к интернету", {
+          status: 503,
+          headers: { "Content-Type": "text/plain; charset=utf-8" }
+        });
+      }
+    })()
   );
 });
