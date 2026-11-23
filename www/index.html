@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#641b2b">
+  <meta name="description" content="TheAppleBook — социальная сеть для общения и новых знакомств.">
+  <title>TheAppleBook</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <link rel="stylesheet" href="style.css?v=20261123b">
+  <link rel="stylesheet" href="achievements.css">
+  <link rel="stylesheet" href="extras.css">
+  <link rel="stylesheet" href="profile.css">
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="brand">The<span>Apple</span>Book</div>
+    <div id="topUser" class="top-user"></div>
+  </header>
+
+  <main class="shell">
+
+    <!-- АВТОРИЗАЦИЯ -->
+    <section id="authView" class="auth-card">
+      <div class="auth-brand">🍎 TheAppleBook</div>
+      <h1>Добро пожаловать</h1>
+      <p class="muted">Старая атмосфера. Новые возможности.</p>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="login">Войти</button>
+        <button class="tab" data-tab="signup">Регистрация</button>
+      </div>
+
+      <form id="loginForm">
+        <label>Email
+          <input id="loginEmail" type="email" required autocomplete="email">
+        </label>
+
+        <label>Пароль
+          <input id="loginPassword" type="password" required autocomplete="current-password">
+        </label>
+
+        <button class="primary wide">Войти</button>
+      </form>
+
+      <form id="signupForm" class="hidden">
+        <label>Имя пользователя
+          <input id="signupName" maxlength="32" required placeholder="Например, Alex">
+        </label>
+
+        <label>Email
+          <input id="signupEmail" type="email" required autocomplete="email">
+        </label>
+
+        <label>Пароль
+          <input id="signupPassword" type="password" minlength="8" required autocomplete="new-password">
+        </label>
+
+        <button class="primary wide">Создать аккаунт</button>
+        <p class="tiny muted">После регистрации может потребоваться подтверждение email.</p>
+      </form>
+
+      <div class="qr-login-entry">
+        <button id="startQrLogin" class="secondary wide" type="button">Войти по QR с уже авторизованного устройства</button>
+        <div id="qrLoginPanel" class="qr-login-panel hidden">
+          <p class="muted">Открой камеру на своём устройстве, где ты уже вошёл, и подтверди вход. Код действует 2 минуты.</p>
+          <img id="qrLoginImage" alt="Одноразовый QR-код для входа" width="260" height="260" class="hidden">
+          <p id="qrLoginCode" class="pill hidden"></p>
+          <p id="qrLoginStatus" class="notice" aria-live="polite"></p>
+          <button id="cancelQrLogin" class="secondary" type="button">Отмена</button>
+        </div>
+      </div>
+
+      <p id="authMessage" class="notice" aria-live="polite"></p>
+    </section>
+
+    <!-- ОСНОВНОЕ ПРИЛОЖЕНИЕ -->
+    <section id="appView" class="hidden">
+      <div class="layout">
+
+        <aside class="sidebar">
+
+          <div class="panel profile-mini">
+            <div class="cover"></div>
+            <div class="avatar" id="myAvatar">?</div>
+            <h2 id="myName">Пользователь</h2>
+            <div id="myRole"></div>
+            <p id="myStatus" class="muted"></p>
+          </div>
+
+          <nav class="panel nav">
+            <button data-page="feed" class="nav-btn active">🏠 Лента</button>
+            <button data-page="notes" class="nav-btn">📝 Notes</button>
+            <button data-page="gifts" class="nav-btn">🎁 Подарки</button>
+            <button data-page="people" class="nav-btn">🔎 Поиск людей</button>
+            <button data-page="friends" class="nav-btn">👥 Друзья</button>
+            <button data-page="messages" class="nav-btn">💬 Сообщения</button>
+            <button data-page="profile" class="nav-btn">👤 Мой профиль</button>
+            <button data-page="app" class="nav-btn">📱 Приложение</button>
+            <button data-page="admin" id="adminNav" class="nav-btn hidden">👑 Управление</button>
+            <button data-page="settings" class="nav-btn">⚙ Настройки</button>
+            <button data-page="help" class="nav-btn">❔ Help</button>
+            <button id="logoutBtn" class="nav-btn">↪ Выйти</button>
+          </nav>
+
+        </aside>
+
+        <section class="maincol">
+
+          <!-- ЛЕНТА -->
+          <section class="page" id="page-feed">
+            <div class="hero">
+              <h1>Твоя сеть. Твои люди.</h1>
+              <p>TheAppleBook — место для общения и новых знакомств.</p>
+            </div>
+
+            <div class="panel pad">
+              <h2>Создать публикацию</h2>
+
+              <form id="postForm">
+                <textarea id="postText" maxlength="2000" rows="3"
+                  placeholder="О чём думаешь?" required></textarea>
+
+                <button class="primary">Опубликовать</button>
+              </form>
+            </div>
+
+            <div id="feedList"></div>
+          </section>
+
+          <section class="page hidden" id="page-notes">
+            <div class="panel pad"><h1>📝 Личные Notes</h1><p class="muted">Записи доступны только вашему аккаунту.</p>
+              <form id="noteForm"><label>Новая запись<textarea id="noteBody" maxlength="10000" rows="4" required></textarea></label><button class="primary">Сохранить</button></form>
+              <div id="notesList"></div>
+            </div>
+          </section>
+
+          <section class="page hidden" id="page-gifts">
+            <div class="panel pad"><h1>🎁 Подарки и токены</h1>
+              <p id="walletBalance" class="pill">Баланс загружается…</p>
+              <button id="claimDailyTokens" class="primary" type="button">Получить ежедневные 250 токенов</button>
+              <p id="giftMessage" class="notice" aria-live="polite"></p>
+              <label>Ник получателя<input id="giftRecipient" maxlength="32" placeholder="Имя пользователя"></label>
+              <div id="giftCatalog" class="gift-grid"></div>
+              <h3>История операций</h3><div id="tokenHistory"></div>
+            </div>
+          </section>
+
+          <section class="page hidden" id="page-help">
+            <div class="panel pad"><h1>Help и правила</h1>
+              <h3>Аккаунт и безопасность</h3><p>Используйте уникальное имя, надёжный пароль и подтверждённую почту. Никогда не делитесь кодами входа. Видимость телефона и даты рождения настраивается отдельно.</p>
+              <h3>Общение</h3><p>Добавляйте друзей, отправляйте личные сообщения, делитесь публикациями и подарками. Жалобы и вопросы по ограничениям направляйте администрации; решения должны иметь объяснение и возможность апелляции.</p>
+              <h3>Приватность</h3><p>Notes видны только вам. Невидимый режим скрывает присутствие, а спящий режим показывает, что вы отошли. Контент и данные профиля не публикуйте без согласия других людей.</p>
+              <h3>Правила и поведение на сайте</h3><p>Запрещены травля, угрозы, мошенничество, спам, публикация чужих личных данных и незаконный контент. Модерация должна быть соразмерной, объяснимой и доступной для обжалования.</p>
+            </div>
+          </section>
+
+          <!-- ПОИСК -->
+          <section class="page hidden" id="page-people">
+            <div class="panel pad">
+              <p id="peopleWelcome" class="muted"></p>
+              <h2>Поиск пользователей</h2>
+              <input id="peopleSearch" placeholder="Введи имя пользователя">
+              <div id="peopleResults" class="results"></div>
+            </div>
+          </section>
+
+          <!-- ДРУЗЬЯ -->
+          <section class="page hidden" id="page-friends">
+            <div class="panel pad">
+              <h2>Заявки в друзья</h2>
+              <div id="incomingRequests"></div>
+            </div>
+
+            <div class="panel pad">
+              <h2>Мои друзья</h2>
+              <div id="friendsList"></div>
+            </div>
+          </section>
+
+          <!-- СООБЩЕНИЯ -->
+          <section class="page hidden" id="page-messages">
+            <div class="panel pad">
+              <h2>💬 Личные сообщения</h2>
+              <p class="muted">Твоя личная переписка с друзьями.</p>
+
+              <div class="messages-layout">
+
+                <div class="messages-contacts">
+                  <h3>Мои друзья</h3>
+
+                  <div id="messageContacts">
+                    <p class="muted">Загрузка друзей...</p>
+                  </div>
+                </div>
+
+                <div class="chat-panel">
+                  <div id="chatHeader" class="chat-header">
+                    Выбери друга, чтобы начать переписку
+                  </div>
+
+                  <div id="chatHistory" class="chat-history" aria-live="polite">
+                    <p class="muted">Здесь будут отображаться сообщения.</p>
+                  </div>
+
+                  <form id="messageForm" class="message-form">
+                    <div class="chat-tools">
+                      <button id="attachMessageButton" type="button" class="secondary" aria-label="Прикрепить файл">＋</button>
+                      <input id="messageFileInput" class="hidden" type="file" accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,audio/webm,audio/mp4,application/pdf,text/plain">
+                      <button id="emojiToggle" type="button" class="secondary" aria-label="Выбрать эмодзи">😊</button>
+                      <button id="voiceRecordButton" type="button" class="secondary" aria-label="Записать голосовое сообщение">🎙️</button>
+                      <span id="voiceRecordStatus" class="tiny muted" aria-live="polite"></span>
+                    </div>
+                    <div id="messageEmojiPicker" class="message-emoji-picker hidden" aria-label="Эмодзи"><button type="button" data-message-emoji="😀">😀</button><button type="button" data-message-emoji="😃">😃</button><button type="button" data-message-emoji="😄">😄</button><button type="button" data-message-emoji="😁">😁</button><button type="button" data-message-emoji="😆">😆</button><button type="button" data-message-emoji="😅">😅</button><button type="button" data-message-emoji="😂">😂</button><button type="button" data-message-emoji="🙂">🙂</button><button type="button" data-message-emoji="🙃">🙃</button><button type="button" data-message-emoji="😉">😉</button><button type="button" data-message-emoji="😊">😊</button><button type="button" data-message-emoji="😇">😇</button><button type="button" data-message-emoji="🥰">🥰</button><button type="button" data-message-emoji="😍">😍</button><button type="button" data-message-emoji="🤩">🤩</button><button type="button" data-message-emoji="😘">😘</button><button type="button" data-message-emoji="😗">😗</button><button type="button" data-message-emoji="😚">😚</button><button type="button" data-message-emoji="😋">😋</button><button type="button" data-message-emoji="😛">😛</button><button type="button" data-message-emoji="😜">😜</button><button type="button" data-message-emoji="🤪">🤪</button><button type="button" data-message-emoji="🤗">🤗</button><button type="button" data-message-emoji="🤔">🤔</button><button type="button" data-message-emoji="🫡">🫡</button><button type="button" data-message-emoji="🤐">🤐</button><button type="button" data-message-emoji="🤨">🤨</button><button type="button" data-message-emoji="😐">😐</button><button type="button" data-message-emoji="😑">😑</button><button type="button" data-message-emoji="😶">😶</button><button type="button" data-message-emoji="😏">😏</button><button type="button" data-message-emoji="😒">😒</button><button type="button" data-message-emoji="🙄">🙄</button><button type="button" data-message-emoji="😬">😬</button><button type="button" data-message-emoji="🤥">🤥</button><button type="button" data-message-emoji="😌">😌</button><button type="button" data-message-emoji="😔">😔</button><button type="button" data-message-emoji="😪">😪</button><button type="button" data-message-emoji="🤤">🤤</button><button type="button" data-message-emoji="😴">😴</button><button type="button" data-message-emoji="😷">😷</button><button type="button" data-message-emoji="🤒">🤒</button><button type="button" data-message-emoji="🤕">🤕</button><button type="button" data-message-emoji="🤧">🤧</button><button type="button" data-message-emoji="🥵">🥵</button><button type="button" data-message-emoji="🥶">🥶</button><button type="button" data-message-emoji="🥴">🥴</button><button type="button" data-message-emoji="😵">😵</button><button type="button" data-message-emoji="🤯">🤯</button><button type="button" data-message-emoji="🤠">🤠</button><button type="button" data-message-emoji="🥳">🥳</button><button type="button" data-message-emoji="😎">😎</button><button type="button" data-message-emoji="🤓">🤓</button><button type="button" data-message-emoji="🧐">🧐</button><button type="button" data-message-emoji="😕">😕</button><button type="button" data-message-emoji="🫤">🫤</button><button type="button" data-message-emoji="🙁">🙁</button><button type="button" data-message-emoji="☹️">☹️</button><button type="button" data-message-emoji="😮">😮</button><button type="button" data-message-emoji="😯">😯</button><button type="button" data-message-emoji="😲">😲</button><button type="button" data-message-emoji="😳">😳</button><button type="button" data-message-emoji="🥺">🥺</button><button type="button" data-message-emoji="😦">😦</button><button type="button" data-message-emoji="😧">😧</button><button type="button" data-message-emoji="😨">😨</button><button type="button" data-message-emoji="😰">😰</button><button type="button" data-message-emoji="😥">😥</button><button type="button" data-message-emoji="😢">😢</button><button type="button" data-message-emoji="😭">😭</button><button type="button" data-message-emoji="😱">😱</button><button type="button" data-message-emoji="😖">😖</button><button type="button" data-message-emoji="😣">😣</button><button type="button" data-message-emoji="😞">😞</button><button type="button" data-message-emoji="😓">😓</button><button type="button" data-message-emoji="😩">😩</button><button type="button" data-message-emoji="😫">😫</button><button type="button" data-message-emoji="🥱">🥱</button><button type="button" data-message-emoji="😤">😤</button><button type="button" data-message-emoji="😡">😡</button><button type="button" data-message-emoji="😠">😠</button><button type="button" data-message-emoji="🤬">🤬</button><button type="button" data-message-emoji="😈">😈</button><button type="button" data-message-emoji="👿">👿</button><button type="button" data-message-emoji="💀">💀</button><button type="button" data-message-emoji="☠️">☠️</button><button type="button" data-message-emoji="💩">💩</button><button type="button" data-message-emoji="🤡">🤡</button><button type="button" data-message-emoji="👻">👻</button><button type="button" data-message-emoji="👽">👽</button><button type="button" data-message-emoji="🤖">🤖</button><button type="button" data-message-emoji="🎃">🎃</button><button type="button" data-message-emoji="😺">😺</button><button type="button" data-message-emoji="😸">😸</button><button type="button" data-message-emoji="😹">😹</button><button type="button" data-message-emoji="😻">😻</button><button type="button" data-message-emoji="😼">😼</button><button type="button" data-message-emoji="😽">😽</button><button type="button" data-message-emoji="🙀">🙀</button><button type="button" data-message-emoji="😿">😿</button><button type="button" data-message-emoji="😾">😾</button><button type="button" data-message-emoji="👋">👋</button><button type="button" data-message-emoji="🤚">🤚</button><button type="button" data-message-emoji="🖐️">🖐️</button><button type="button" data-message-emoji="✋">✋</button><button type="button" data-message-emoji="🖖">🖖</button><button type="button" data-message-emoji="👌">👌</button><button type="button" data-message-emoji="🤌">🤌</button><button type="button" data-message-emoji="🤏">🤏</button><button type="button" data-message-emoji="✌️">✌️</button><button type="button" data-message-emoji="🤞">🤞</button><button type="button" data-message-emoji="🫰">🫰</button><button type="button" data-message-emoji="🤟">🤟</button><button type="button" data-message-emoji="🤘">🤘</button><button type="button" data-message-emoji="🤙">🤙</button><button type="button" data-message-emoji="👈">👈</button><button type="button" data-message-emoji="👉">👉</button><button type="button" data-message-emoji="👆">👆</button><button type="button" data-message-emoji="🖕">🖕</button><button type="button" data-message-emoji="👇">👇</button><button type="button" data-message-emoji="☝️">☝️</button><button type="button" data-message-emoji="👍">👍</button><button type="button" data-message-emoji="👎">👎</button><button type="button" data-message-emoji="✊">✊</button><button type="button" data-message-emoji="👊">👊</button><button type="button" data-message-emoji="🤛">🤛</button><button type="button" data-message-emoji="🤜">🤜</button><button type="button" data-message-emoji="👏">👏</button><button type="button" data-message-emoji="🙌">🙌</button><button type="button" data-message-emoji="👐">👐</button><button type="button" data-message-emoji="🤲">🤲</button><button type="button" data-message-emoji="🤝">🤝</button><button type="button" data-message-emoji="🙏">🙏</button><button type="button" data-message-emoji="💪">💪</button><button type="button" data-message-emoji="🦾">🦾</button><button type="button" data-message-emoji="🖤">🖤</button><button type="button" data-message-emoji="🤍">🤍</button><button type="button" data-message-emoji="❤️">❤️</button><button type="button" data-message-emoji="🧡">🧡</button><button type="button" data-message-emoji="💛">💛</button><button type="button" data-message-emoji="💚">💚</button><button type="button" data-message-emoji="💙">💙</button><button type="button" data-message-emoji="💜">💜</button><button type="button" data-message-emoji="🤎">🤎</button><button type="button" data-message-emoji="💔">💔</button><button type="button" data-message-emoji="❣️">❣️</button><button type="button" data-message-emoji="💕">💕</button><button type="button" data-message-emoji="💞">💞</button><button type="button" data-message-emoji="💓">💓</button><button type="button" data-message-emoji="💗">💗</button><button type="button" data-message-emoji="💖">💖</button><button type="button" data-message-emoji="💘">💘</button><button type="button" data-message-emoji="💝">💝</button><button type="button" data-message-emoji="💟">💟</button><button type="button" data-message-emoji="🔥">🔥</button><button type="button" data-message-emoji="✨">✨</button><button type="button" data-message-emoji="⭐">⭐</button><button type="button" data-message-emoji="🌟">🌟</button><button type="button" data-message-emoji="💫">💫</button><button type="button" data-message-emoji="⚡">⚡</button><button type="button" data-message-emoji="☀️">☀️</button><button type="button" data-message-emoji="🌙">🌙</button><button type="button" data-message-emoji="🌈">🌈</button><button type="button" data-message-emoji="☁️">☁️</button><button type="button" data-message-emoji="❄️">❄️</button><button type="button" data-message-emoji="☔">☔</button><button type="button" data-message-emoji="🌊">🌊</button><button type="button" data-message-emoji="🍎">🍎</button><button type="button" data-message-emoji="🍏">🍏</button><button type="button" data-message-emoji="🍐">🍐</button><button type="button" data-message-emoji="🍊">🍊</button><button type="button" data-message-emoji="🍋">🍋</button><button type="button" data-message-emoji="🍌">🍌</button><button type="button" data-message-emoji="🍉">🍉</button><button type="button" data-message-emoji="🍇">🍇</button><button type="button" data-message-emoji="🍓">🍓</button><button type="button" data-message-emoji="🫐">🫐</button><button type="button" data-message-emoji="🍒">🍒</button><button type="button" data-message-emoji="🍑">🍑</button><button type="button" data-message-emoji="🥭">🥭</button><button type="button" data-message-emoji="🍍">🍍</button><button type="button" data-message-emoji="🥥">🥥</button><button type="button" data-message-emoji="🥝">🥝</button><button type="button" data-message-emoji="🍅">🍅</button><button type="button" data-message-emoji="🥑">🥑</button><button type="button" data-message-emoji="🍆">🍆</button><button type="button" data-message-emoji="🥔">🥔</button><button type="button" data-message-emoji="🥕">🥕</button><button type="button" data-message-emoji="🌽">🌽</button><button type="button" data-message-emoji="🌶️">🌶️</button><button type="button" data-message-emoji="🥒">🥒</button><button type="button" data-message-emoji="🥬">🥬</button><button type="button" data-message-emoji="🥦">🥦</button><button type="button" data-message-emoji="🧄">🧄</button><button type="button" data-message-emoji="🧅">🧅</button><button type="button" data-message-emoji="🍄">🍄</button><button type="button" data-message-emoji="🥜">🥜</button><button type="button" data-message-emoji="🍞">🍞</button><button type="button" data-message-emoji="🥐">🥐</button><button type="button" data-message-emoji="🥨">🥨</button><button type="button" data-message-emoji="🧀">🧀</button><button type="button" data-message-emoji="🍕">🍕</button><button type="button" data-message-emoji="🍔">🍔</button><button type="button" data-message-emoji="🍟">🍟</button><button type="button" data-message-emoji="🌭">🌭</button><button type="button" data-message-emoji="🍿">🍿</button><button type="button" data-message-emoji="🧁">🧁</button><button type="button" data-message-emoji="🎂">🎂</button><button type="button" data-message-emoji="🍰">🍰</button><button type="button" data-message-emoji="🍫">🍫</button><button type="button" data-message-emoji="🍬">🍬</button><button type="button" data-message-emoji="🍭">🍭</button><button type="button" data-message-emoji="☕">☕</button><button type="button" data-message-emoji="🧋">🧋</button><button type="button" data-message-emoji="🥤">🥤</button><button type="button" data-message-emoji="⚽">⚽</button><button type="button" data-message-emoji="🏀">🏀</button><button type="button" data-message-emoji="🏈">🏈</button><button type="button" data-message-emoji="⚾">⚾</button><button type="button" data-message-emoji="🎾">🎾</button><button type="button" data-message-emoji="🏐">🏐</button><button type="button" data-message-emoji="🎱">🎱</button><button type="button" data-message-emoji="🏓">🏓</button><button type="button" data-message-emoji="🏸">🏸</button><button type="button" data-message-emoji="🥊">🥊</button><button type="button" data-message-emoji="🏆">🏆</button><button type="button" data-message-emoji="🎮">🎮</button><button type="button" data-message-emoji="🎧">🎧</button><button type="button" data-message-emoji="🎵">🎵</button><button type="button" data-message-emoji="🎶">🎶</button><button type="button" data-message-emoji="🎤">🎤</button><button type="button" data-message-emoji="🎹">🎹</button><button type="button" data-message-emoji="🎸">🎸</button><button type="button" data-message-emoji="🎻">🎻</button><button type="button" data-message-emoji="🎬">🎬</button><button type="button" data-message-emoji="📷">📷</button><button type="button" data-message-emoji="💻">💻</button><button type="button" data-message-emoji="📱">📱</button><button type="button" data-message-emoji="⌚">⌚</button><button type="button" data-message-emoji="💡">💡</button><button type="button" data-message-emoji="📚">📚</button><button type="button" data-message-emoji="✏️">✏️</button><button type="button" data-message-emoji="📝">📝</button><button type="button" data-message-emoji="🚗">🚗</button><button type="button" data-message-emoji="🚕">🚕</button><button type="button" data-message-emoji="🚌">🚌</button><button type="button" data-message-emoji="🚎">🚎</button><button type="button" data-message-emoji="🏎️">🏎️</button><button type="button" data-message-emoji="🚓">🚓</button><button type="button" data-message-emoji="🚑">🚑</button><button type="button" data-message-emoji="🚒">🚒</button><button type="button" data-message-emoji="🚲">🚲</button><button type="button" data-message-emoji="✈️">✈️</button><button type="button" data-message-emoji="🚀">🚀</button><button type="button" data-message-emoji="🚢">🚢</button><button type="button" data-message-emoji="🏠">🏠</button><button type="button" data-message-emoji="🏰">🏰</button><button type="button" data-message-emoji="🌍">🌍</button><button type="button" data-message-emoji="🌎">🌎</button><button type="button" data-message-emoji="🌏">🌏</button><button type="button" data-message-emoji="🐶">🐶</button><button type="button" data-message-emoji="🐱">🐱</button><button type="button" data-message-emoji="🐭">🐭</button><button type="button" data-message-emoji="🐹">🐹</button><button type="button" data-message-emoji="🐰">🐰</button><button type="button" data-message-emoji="🦊">🦊</button><button type="button" data-message-emoji="🐻">🐻</button><button type="button" data-message-emoji="🐼">🐼</button><button type="button" data-message-emoji="🐨">🐨</button><button type="button" data-message-emoji="🐯">🐯</button><button type="button" data-message-emoji="🦁">🦁</button><button type="button" data-message-emoji="🐮">🐮</button><button type="button" data-message-emoji="🐷">🐷</button><button type="button" data-message-emoji="🐸">🐸</button><button type="button" data-message-emoji="🐵">🐵</button><button type="button" data-message-emoji="🐔">🐔</button><button type="button" data-message-emoji="🐧">🐧</button><button type="button" data-message-emoji="🐦">🐦</button><button type="button" data-message-emoji="🦆">🦆</button><button type="button" data-message-emoji="🦉">🦉</button><button type="button" data-message-emoji="🦇">🦇</button><button type="button" data-message-emoji="🐺">🐺</button><button type="button" data-message-emoji="🐗">🐗</button><button type="button" data-message-emoji="🐴">🐴</button><button type="button" data-message-emoji="🦄">🦄</button><button type="button" data-message-emoji="🐝">🐝</button><button type="button" data-message-emoji="🦋">🦋</button><button type="button" data-message-emoji="🐌">🐌</button><button type="button" data-message-emoji="🐞">🐞</button><button type="button" data-message-emoji="🐢">🐢</button><button type="button" data-message-emoji="🐍">🐍</button><button type="button" data-message-emoji="🦎">🦎</button><button type="button" data-message-emoji="🐙">🐙</button><button type="button" data-message-emoji="🦑">🦑</button><button type="button" data-message-emoji="🦀">🦀</button><button type="button" data-message-emoji="🐠">🐠</button><button type="button" data-message-emoji="🐬">🐬</button><button type="button" data-message-emoji="🐳">🐳</button><button type="button" data-message-emoji="🦈">🦈</button><button type="button" data-message-emoji="🐊">🐊</button><button type="button" data-message-emoji="🐘">🐘</button><button type="button" data-message-emoji="🦒">🦒</button><button type="button" data-message-emoji="🦘">🦘</button><button type="button" data-message-emoji="🦥">🦥</button><button type="button" data-message-emoji="🦦">🦦</button><button type="button" data-message-emoji="🦩">🦩</button><button type="button" data-message-emoji="🦚">🦚</button><button type="button" data-message-emoji="🦜">🦜</button><button type="button" data-message-emoji="🐉">🐉</button><button type="button" data-message-emoji="🐲">🐲</button></div>
+                    <div id="messageAttachmentPreview" class="message-attachment-preview hidden">
+                      <div id="messageAttachmentPreviewContent"></div>
+                      <div class="attachment-preview-actions">
+                        <button id="sendPendingAttachment" type="button" class="primary">Отправить файл</button>
+                        <button id="cancelPendingAttachment" type="button" class="secondary" aria-label="Отменить прикрепление">✕</button>
+                      </div>
+                    </div>
+                    <textarea id="messageInput" rows="2" maxlength="2000"
+                      placeholder="Напиши сообщение..." autocomplete="off" disabled></textarea>
+
+                    <button id="messageSend" class="primary" type="submit" disabled>
+                      Отправить
+                    </button>
+                  </form>
+                </div>
+
+              </div>
+            </div>
+          </section>
+
+          <!-- ПРОФИЛЬ -->
+          <section class="page hidden" id="page-profile">
+
+            <div class="panel pad">
+              <h2>Мой профиль</h2>
+              <div id="profileDetails"></div>
+              <div id="profileExtra"></div>
+            </div>
+
+            <div class="panel pad achievements-panel">
+              <div class="achievements-heading">
+                <div>
+                  <h2>🏆 Мои достижения</h2>
+                  <p class="muted">Твоя история в TheAppleBook.</p>
+                </div>
+
+                <span id="achievementCount" class="pill">0 достижений</span>
+              </div>
+
+              <div id="achievementsList" class="achievements-grid">
+                <p class="muted">Открой профиль для загрузки достижений.</p>
+              </div>
+
+              <p class="tiny muted">
+                Нажми на звёздочку, чтобы выбрать награды для показа.
+              </p>
+            </div>
+
+          </section>
+
+          <!-- ПРИЛОЖЕНИЕ -->
+          <section class="page hidden" id="page-app">
+
+            <div class="hero app-hero">
+              <h1>📱 TheAppleBook App</h1>
+              <p>Твоя социальная сеть всегда под рукой.</p>
+            </div>
+
+            <div class="panel pad">
+              <h2>Установить TheAppleBook</h2>
+
+              <p class="muted">
+                Установи TheAppleBook на своё устройство и запускай
+                его отдельно от браузера.
+              </p>
+
+              <div class="app-install-card">
+                <div class="app-install-icon">🍎</div>
+
+                <div>
+                  <h3>TheAppleBook</h3>
+                  <p class="muted tiny">Официальное веб-приложение</p>
+                </div>
+              </div>
+
+              <button id="installAppButton" class="primary wide" type="button">
+                📲 Установить приложение
+              </button>
+
+              <p id="installAppMessage" class="notice" aria-live="polite">
+                Доступность установки зависит от браузера и устройства.
+              </p>
+            </div>
+
+            <div class="panel pad">
+              <h2>Возможности приложения</h2>
+
+              <div class="app-feature">
+                <span>⚡</span>
+                <div>
+                  <strong>Быстрый запуск</strong>
+                  <p class="muted">Открывай TheAppleBook с рабочего стола.</p>
+                </div>
+              </div>
+
+              <div class="app-feature">
+                <span>🎨</span>
+                <div>
+                  <strong>Твой дизайн</strong>
+                  <p class="muted">Сохраняй выбранную тему оформления.</p>
+                </div>
+              </div>
+
+              <div class="app-feature">
+                <span>💬</span>
+                <div>
+                  <strong>Общение</strong>
+                  <p class="muted">Друзья, публикации и личные сообщения.</p>
+                </div>
+              </div>
+
+              <div class="app-feature">
+                <span>🔄</span>
+                <div>
+                  <strong>Обновления</strong>
+                  <p class="muted">Новые версии будут появляться автоматически.</p>
+                </div>
+              </div>
+            </div>
+
+          </section>
+
+          <!-- УПРАВЛЕНИЕ -->
+          <section class="page hidden" id="page-admin">
+            <div class="panel pad">
+              <h2>Administration Center</h2>
+              <p class="muted">Управление TheAppleBook.</p>
+              <div id="adminContent"></div>
+            </div>
+          </section>
+
+          <!-- НАСТРОЙКИ -->
+          <section class="page hidden" id="page-settings">
+
+            <div class="panel pad">
+              <h2>Настройки профиля</h2>
+
+              <form id="profileForm">
+                <label>Имя пользователя
+                  <input id="editName" maxlength="32" required>
+                </label>
+
+                <label>Статус присутствия
+                  <select id="editStatus">
+                    <option value="online">В сети</option>
+                    <option value="invisible">Невидимый</option>
+                    <option value="sleep">Спящий режим</option>
+                  </select>
+                </label>
+
+                <label>О себе
+                  <textarea id="editBio" maxlength="240" rows="3"></textarea>
+                </label>
+
+                <button class="primary">Сохранить профиль</button>
+              </form>
+            </div>
+
+            <div class="panel pad"><h2>Аккаунт и приватность</h2>
+              <details><summary>Конфиденциальность</summary><p>Notes доступны только вам. Телефон и дата рождения хранятся отдельно с персональной видимостью. Режим «Невидимый» не раскрывается другим пользователям.</p></details>
+              <details><summary>Правила и поведение на сайте</summary><p>Запрещены травля, угрозы, мошенничество, спам, публикация чужих личных данных и незаконный контент. Ограничения должны иметь объяснение и возможность апелляции.</p></details>
+              <label>Телефон<input id="phoneInput" type="tel" autocomplete="tel" maxlength="30"></label>
+              <label><input id="phoneVisible" type="checkbox"> Показывать номер в профиле</label>
+              <label>Дата рождения<input id="birthDateInput" type="date"></label>
+              <label><input id="birthDateVisible" type="checkbox"> Показывать возраст (по умолчанию выключено)</label>
+              <button id="savePrivateProfile" class="secondary" type="button">Сохранить приватные данные</button>
+              <hr><h3>Смена email и пароля</h3>
+              <label>Новый email<input id="newEmail" type="email" autocomplete="email"></label>
+              <button id="changeEmail" class="secondary" type="button">Изменить email</button>
+              <label>Новый пароль<input id="newPassword" type="password" minlength="8" autocomplete="new-password"></label>
+              <button id="changePassword" class="secondary" type="button">Изменить пароль</button>
+              <p id="accountSettingsMessage" class="notice" aria-live="polite"></p>
+              <hr><h3>Состояние аккаунта</h3><p id="accountStanding" class="muted"></p>
+              <button id="deactivateAccount" class="secondary" type="button">Временно отключить аккаунт</button>
+              <button id="reactivateAccount" class="secondary hidden" type="button">Повторно активировать</button>
+              <p class="tiny muted">Удаление аккаунта необратимо и выполняется через защищённую серверную функцию после подтверждения.</p>
+              <button id="deleteAccount" class="danger" type="button">Удалить аккаунт</button>
+            </div>
+
+            <div class="panel pad">
+              <h2>🖼️ Оформление профиля</h2>
+
+              <div class="profile-editor-avatar">
+                <div id="avatarPreview" class="avatar-preview">?</div>
+
+                <div>
+                  <strong>Твоя аватарка</strong>
+                  <p class="muted tiny">Фотография или эмодзи.</p>
+                </div>
+              </div>
+
+              <label>Загрузить фотографию
+                <input type="file" id="avatarFile" accept="image/png,image/jpeg,image/webp">
+              </label>
+
+              <p class="tiny muted">
+                Максимальный размер — 3 МБ. Форматы PNG, JPG, WebP.
+              </p>
+
+              <button id="uploadAvatar" class="primary" type="button">
+                Загрузить аватар
+              </button>
+
+              <hr>
+
+              <h3>Или выбери эмодзи</h3>
+
+              <div id="emojiPicker" class="emoji-picker">
+                <button type="button" data-emoji="🍎">🍎</button>
+                <button type="button" data-emoji="🦇">🦇</button>
+                <button type="button" data-emoji="🐺">🐺</button>
+                <button type="button" data-emoji="👑">👑</button>
+                <button type="button" data-emoji="🌙">🌙</button>
+                <button type="button" data-emoji="⭐">⭐</button>
+                <button type="button" data-emoji="🖤">🖤</button>
+                <button type="button" data-emoji="🔥">🔥</button>
+                <button type="button" data-emoji="🎭">🎭</button>
+                <button type="button" data-emoji="🕷️">🕷️</button>
+                <button type="button" data-emoji="⚡">⚡</button>
+                <button type="button" data-emoji="🌹">🌹</button>
+              </div>
+
+              <button id="saveEmoji" class="secondary" type="button">
+                Сохранить эмодзи
+              </button>
+
+              <hr>
+
+              <h3>Уникальное имя</h3>
+              <p class="muted tiny">Твой персональный ник в TheAppleBook.</p>
+
+              <label>Твой @ник
+                <div class="handle-input">
+                  <span>@</span>
+                  <input id="handleInput" maxlength="20" placeholder="viktors">
+                </div>
+              </label>
+
+              <button id="saveHandle" class="primary" type="button">
+                Сохранить ник
+              </button>
+
+              <p id="profileSettingsMessage" class="notice" aria-live="polite"></p>
+            </div>
+
+            <div class="panel pad">
+              <h3>Внешний вид</h3>
+
+              <label>Тема
+                <select id="themeSelect">
+                  <option value="burgundy">Бордовая классика</option>
+                  <option value="dark">Тёмная</option>
+                </select>
+              </label>
+
+              <button id="saveTheme" class="secondary">
+                Сохранить тему
+              </button>
+            </div>
+
+          </section>
+
+        </section>
+
+        <!-- ПРАВАЯ КОЛОНКА -->
+        <aside class="rightcol">
+
+          <div class="panel pad">
+            <h3>О TheAppleBook</h3>
+            <p class="muted">Основан 22 ноября 2026</p>
+            <p>Владелец проекта: <strong>Viktor Serbin</strong></p>
+            <p class="tiny muted">Роли и доступы проверяются базой данных.</p>
+          </div>
+
+          <div class="panel pad">
+            <h3>Быстрый переход</h3>
+            <button class="link-btn" data-go="people">Найти людей →</button>
+            <button class="link-btn" data-go="friends">Мои друзья →</button>
+            <button class="link-btn" data-go="messages">Сообщения →</button>
+            <button class="link-btn" data-go="app">Приложение →</button>
+          </div>
+
+        </aside>
+
+      </div>
+    </section>
+
+    <p id="globalMessage" class="global-message" aria-live="polite"></p>
+
+  </main>
+
+  <footer>TheAppleBook © 2026 · Founded by Viktor Serbin</footer>
+
+  <script type="module" src="app.js"></script>
+  <script type="module" src="achievements.js"></script>
+  <script type="module" src="profile.js"></script>
+  <script type="module" src="extras.js"></script>
+  <script type="module" src="pwa.js"></script>
+  <script type="module" src="moderation.js"></script>
+
+</body>
+</html>

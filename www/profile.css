@@ -1,0 +1,83 @@
+.profile-editor-avatar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 18px 0;
+}
+
+.avatar-preview {
+  width: 90px;
+  height: 90px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--pale);
+  border: 3px solid var(--wine);
+  font-size: 38px;
+  overflow: hidden;
+}
+
+.avatar-preview img,
+#myAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.emoji-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin: 15px 0;
+}
+
+.emoji-picker button {
+  width: 48px;
+  height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  font-size: 25px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.emoji-picker button:hover,
+.emoji-picker button.selected {
+  border-color: var(--wine);
+  background: var(--pale);
+  transform: translateY(-2px);
+}
+
+.handle-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.handle-input span {
+  font-size: 19px;
+  font-weight: bold;
+  color: var(--wine);
+}
+
+.handle-input input {
+  flex: 1;
+}
+
+#profileSettingsMessage {
+  min-height: 20px;
+  margin-top: 14px;
+}
+
+#myAvatar {
+  overflow: hidden;
+}
+
+@media (max-width: 600px) {
+  .profile-editor-avatar {
+    align-items: flex-start;
+  }
+}
