@@ -14,6 +14,10 @@ let messagesChannel = null;
 let searchTimer = null;
 let bootRunning = false;
 let sendingMessage = false;
+let searchRequestId = 0;
+let feedLoadPromise = null;
+let giftLoadPromise = null;
+const presenceCache = new Map();
 
 // =====================================
 // ОБЩИЕ ФУНКЦИИ
@@ -55,9 +59,22 @@ function presenceLabel(mode) {
 
 async function fillPresenceForProfiles(container, profiles) {
   await Promise.all((profiles || []).map(async person => {
-    const { data } = await supabase.rpc("visible_presence", { target_user: person.id });
+    const now = Date.now();
+    let cached = presenceCache.get(person.id);
+    if (!cached || cached.expiresAt <= now) {
+      const pending = supabase.rpc("visible_presence", { target_user: person.id })
+        .then(({ data, error }) => {
+          const value = error ? "hidden" : data;
+          presenceCache.set(person.id, { value, expiresAt: Date.now() + 15000 });
+          return value;
+        })
+        .catch(() => "hidden");
+      cached = { promise: pending, expiresAt: now + 15000 };
+      presenceCache.set(person.id, cached);
+    }
+    const mode = cached.promise ? await cached.promise : cached.value;
     const target = container?.querySelector(`[data-presence-for="${CSS.escape(person.id)}"]`);
-    if (target) target.textContent = presenceLabel(data);
+    if (target) target.textContent = presenceLabel(mode);
   }));
 }
 
@@ -390,7 +407,7 @@ $("postForm")?.addEventListener("submit", async event => {
   await loadFeed();
 });
 
-async function loadFeed() {
+async function loadFeedOnce() {
   if (!currentUser || !$("feedList")) return;
 
   const { data, error } = await supabase
@@ -463,6 +480,13 @@ async function loadFeed() {
   await loadComments(data || []);
 }
 
+async function loadFeed() {
+  if (!feedLoadPromise) {
+    feedLoadPromise = loadFeedOnce().finally(() => { feedLoadPromise = null; });
+  }
+  return feedLoadPromise;
+}
+
 async function loadComments(posts) {
   if (!posts.length) return;
   const { data, error } = await supabase.from("post_comments").select("post_id,user_id,content,profiles(username)").in("post_id", posts.map(post => post.id)).order("created_at");
@@ -509,11 +533,12 @@ document.addEventListener("click", async event => {
 
 $("peopleSearch")?.addEventListener("input", () => {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(searchPeople, 250);
+  searchTimer = setTimeout(searchPeople, 300);
 });
 
 async function searchPeople() {
   if (!currentUser || !$("peopleResults")) return;
+  const requestId = ++searchRequestId;
 
   if ($("peopleWelcome")) $("peopleWelcome").textContent = "Welcome, " + (currentProfile?.username || "friend") + "!";
 
@@ -541,29 +566,19 @@ async function searchPeople() {
     );
   }
 
-  const { data, error } = await query;
+  const [{ data, error }, { data: outgoing }, { data: incoming }] = await Promise.all([
+    query,
+    supabase.from("friendships").select("recipient_id,status").eq("requester_id", currentUser.id),
+    supabase.from("friendships").select("requester_id,status").eq("recipient_id", currentUser.id)
+  ]);
 
   if (error) return say(error.message);
-
-  const { data: outgoing } = await supabase
-    .from("friendships")
-    .select("recipient_id,status")
-    .eq("requester_id", currentUser.id);
-
-  const { data: incoming } = await supabase
-    .from("friendships")
-    .select("requester_id,status")
-    .eq("recipient_id", currentUser.id);
+  if (requestId !== searchRequestId) return;
 
   const relations = new Map();
 
   (outgoing || []).forEach(item => {
     relations.set(item.recipient_id, item.status);
-  });
-
-  (incoming || []).forEach(item => {
-    relations.set(item.requester_id, item.status);
-  });    relations.set(item.recipient_id, item.status);
   });
 
   (incoming || []).forEach(item => {
@@ -589,7 +604,9 @@ async function searchPeople() {
 
     return `
       <div class="result-row">
+
         <div class="person-main">
+
           ${renderAvatarButton(person)}
 
           <div class="user-info">
@@ -613,12 +630,14 @@ async function searchPeople() {
               …
             </small>
           </div>
+
         </div>
 
         <div class="person-actions">
           ${action}
           ${profileLink(person)}
         </div>
+
       </div>
     `;
   }).join("") || `<p class="muted">Пользователи не найдены.</p>`;
@@ -642,6 +661,7 @@ async function sendFriendRequest(id) {
   if (error) return say(error.message);
 
   say("Заявка в друзья отправлена.");
+
   await searchPeople();
 }
 
@@ -661,22 +681,27 @@ async function getAcceptedFriends() {
     role
   `;
 
-  const { data: sent, error: sentError } = await supabase
-    .from("friendships")
-    .select(`recipient_id,profiles!friendships_recipient_id_fkey(${fields})`)
-    .eq("requester_id", currentUser.id)
-    .eq("status", "accepted");
+  const [sentResult, receivedResult] = await Promise.all([
+    supabase
+      .from("friendships")
+      .select(`recipient_id,profiles!friendships_recipient_id_fkey(${fields})`)
+      .eq("requester_id", currentUser.id)
+      .eq("status", "accepted"),
+    supabase
+      .from("friendships")
+      .select(`requester_id,profiles!friendships_requester_id_fkey(${fields})`)
+      .eq("recipient_id", currentUser.id)
+      .eq("status", "accepted")
+  ]);
+
+  const { data: sent, error: sentError } = sentResult;
 
   if (sentError) {
     say(sentError.message);
     return [];
   }
 
-  const { data: received, error: receivedError } = await supabase
-    .from("friendships")
-    .select(`requester_id,profiles!friendships_requester_id_fkey(${fields})`)
-    .eq("recipient_id", currentUser.id)
-    .eq("status", "accepted");
+  const { data: received, error: receivedError } = receivedResult;
 
   if (receivedError) {
     say(receivedError.message);
@@ -718,6 +743,7 @@ async function loadFriends() {
 
     return `
       <div class="result-row">
+
         <div class="person-main">
           ${renderAvatarButton(person)}
 
@@ -743,6 +769,7 @@ async function loadFriends() {
             Отклонить
           </button>
         </span>
+
       </div>
     `;
   }).join("") || `<p class="muted">Новых заявок нет.</p>`;
@@ -763,6 +790,7 @@ async function loadFriends() {
 
   $("friendsList").innerHTML = friends.map(person => `
     <div class="result-row">
+
       <div class="person-main">
         ${renderAvatarButton(person)}
 
@@ -790,15 +818,19 @@ async function loadFriends() {
       >
         Написать
       </button>
+
     </div>
   `).join("") || `<p class="muted">Пока нет друзей.</p>`;
 
   await fillPresenceForProfiles($("friendsList"), friends);
-
   document.querySelectorAll("[data-open-chat]").forEach(button => {
     button.addEventListener("click", () => {
       showPage("messages");
-      openChat(button.dataset.openChat, button.dataset.openName);
+
+      openChat(
+        button.dataset.openChat,
+        button.dataset.openName
+      );
     });
   });
 }
@@ -850,7 +882,10 @@ async function loadMessageContacts() {
 
   document.querySelectorAll("[data-chat-id]").forEach(button => {
     button.addEventListener("click", () => {
-      openChat(button.dataset.chatId, button.dataset.chatName);
+      openChat(
+        button.dataset.chatId,
+        button.dataset.chatName
+      );
     });
   });
 }
@@ -863,8 +898,14 @@ async function openChat(friendId, friendName) {
     username: friendName
   };
 
-  $("chatHeader").innerHTML = `<p class="muted">Загрузка профиля...</p>`;
-  $("chatHistory").innerHTML = `<p class="muted">Загрузка переписки...</p>`;
+  $("chatHeader").innerHTML = `
+    <p class="muted">Загрузка профиля...</p>
+  `;
+
+  $("chatHistory").innerHTML = `
+    <p class="muted">Загрузка переписки...</p>
+  `;
+
   $("messageInput").disabled = false;
   $("messageSend").disabled = false;
 
@@ -890,12 +931,7 @@ async function openChat(friendId, friendName) {
   }
 
   activeChatUser = friend;
-
-  const { data: chatPresence } = await supabase.rpc(
-    "visible_presence",
-    { target_user: friend.id }
-  );
-
+  const { data: chatPresence } = await supabase.rpc("visible_presence", { target_user: friend.id });
   friend.presence_mode = chatPresence;
   $("messageInput").placeholder = "Написать " + friend.username + "!";
 
@@ -917,6 +953,7 @@ async function openChat(friendId, friendName) {
 
   await loadMessageContacts();
   await loadChatMessages();
+
   $("messageInput").focus();
 }
 
@@ -943,7 +980,9 @@ async function loadChatMessages() {
     return;
   }
 
-  if (!activeChatUser || activeChatUser.id !== selectedFriendId) return;
+  if (!activeChatUser || activeChatUser.id !== selectedFriendId) {
+    return;
+  }
 
   $("chatHistory").innerHTML = (data || []).map(message => {
     const mine = message.sender_id === currentUser.id;
@@ -951,7 +990,10 @@ async function loadChatMessages() {
     return `
       <div class="chat-message ${mine ? "mine" : "theirs"}">
         ${esc(message.content)}
-        <span class="chat-time">${formatTime(message.created_at)}</span>
+
+        <span class="chat-time">
+          ${formatTime(message.created_at)}
+        </span>
       </div>
     `;
   }).join("") || `
@@ -969,6 +1011,7 @@ $("messageForm")?.addEventListener("submit", async event => {
   if (!currentUser || !activeChatUser || sendingMessage) return;
 
   const content = $("messageInput").value.trim();
+
   if (!content) return;
 
   const receiverId = activeChatUser.id;
@@ -1015,6 +1058,7 @@ function setupMessagesRealtime() {
 
   messagesChannel = supabase
     .channel("private-messages-" + currentUser.id)
+
     .on(
       "postgres_changes",
       {
@@ -1026,25 +1070,26 @@ function setupMessagesRealtime() {
       async payload => {
         const newMessage = payload.new;
 
-        if (activeChatUser && activeChatUser.id === newMessage.sender_id) {
+        if (
+          activeChatUser &&
+          activeChatUser.id === newMessage.sender_id
+        ) {
           await loadChatMessages();
         } else {
           say("У тебя новое сообщение! Открой раздел «Сообщения».");
           document.title = "Новое сообщение · TheAppleBook";
-
-          if (
-            document.hidden &&
-            "Notification" in window &&
-            Notification.permission === "granted"
-          ) {
-            new Notification("Новое сообщение", {
-              body: "Открой TheAppleBook, чтобы прочитать его."
-            });
+          if (document.hidden && "Notification" in window && Notification.permission === "granted") {
+            new Notification("Новое сообщение", { body: "Открой TheAppleBook, чтобы прочитать его." });
           }
         }
       }
     )
+
     .subscribe(status => {
+      if (status === "SUBSCRIBED") {
+        console.log("TheAppleBook: Realtime messages connected.");
+      }
+
       if (status === "CHANNEL_ERROR") {
         say("Не удалось подключить обновление сообщений в реальном времени.");
       }
@@ -1062,6 +1107,7 @@ function renderProfile() {
 
   $("profileDetails").innerHTML = `
     <div class="profile-public-header">
+
       ${renderAvatar(profile, "profile-large-avatar")}
 
       <div>
@@ -1072,6 +1118,7 @@ function renderProfile() {
 
         <p class="muted">${profileHandle(profile)}</p>
       </div>
+
     </div>
 
     <p>
@@ -1096,3 +1143,509 @@ function renderProfile() {
 // =====================================
 // ОТКРЫТИЕ ПУБЛИЧНОГО ПРОФИЛЯ
 // =====================================
+
+async function openPublicProfile(id) {
+  if (!id || !currentUser) return;
+
+  if (id === currentUser.id) {
+    showPage("profile");
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(`
+      id,
+      username,
+      role,
+      bio,
+      created_at,
+      handle,
+      avatar_url,
+      avatar_emoji,
+      featured_achievement,
+      show_achievement
+    `)
+    .eq("id", id)
+    .single();
+
+  if (error || !data) {
+    say("Не удалось открыть профиль.");
+    return;
+  }
+
+  const { data: publicPresence } = await supabase.rpc("visible_presence", { target_user: id });
+  data.presence_mode = publicPresence;
+  const { data: publicPrivate } = await supabase.rpc("visible_profile_private", { target_user: id });
+  data.public_phone = publicPrivate?.phone || null;
+  data.public_age = publicPrivate?.age ?? null;
+
+  // Записываем просмотр профиля
+  const { error: viewError } = await supabase.rpc(
+    "record_profile_view",
+    {
+      target_profile_id: id
+    }
+  );
+
+  if (viewError) {
+    console.warn("Не удалось записать просмотр профиля:", viewError.message);
+  }
+
+  $("publicProfileModal")?.remove();
+
+  const modal = document.createElement("div");
+
+  modal.id = "publicProfileModal";
+  modal.className = "profile-modal";
+
+  modal.innerHTML = `
+    <div class="profile-modal-card">
+
+      <button
+        class="profile-modal-close"
+        type="button"
+        aria-label="Закрыть профиль"
+      >×</button>
+
+      ${renderAvatar(data, "profile-large-avatar")}
+
+      <h2>${esc(data.username)}</h2>
+
+      <span class="pill">
+        ${esc(roleLabel(data.role))}
+      </span>
+
+      <p class="muted">${profileHandle(data)}</p>
+
+      <div class="public-profile-info">
+
+        <div class="public-profile-item">
+          <strong>Статус</strong>
+          <span>${esc(presenceLabel(data.presence_mode))}</span>
+        </div>
+
+        <div class="public-profile-item">
+          <strong>О себе</strong>
+          <span>${esc(data.bio || "Пока ничего не написано.")}</span>
+        </div>
+
+        ${data.public_phone ? `<div class="public-profile-item"><strong>Телефон</strong><span>${esc(data.public_phone)}</span></div>` : ""}
+        ${data.public_age !== null ? `<div class="public-profile-item"><strong>Возраст</strong><span>${esc(data.public_age)} лет</span></div>` : ""}
+
+        <div class="public-profile-item">
+          <strong>Дата регистрации</strong>
+          <span>
+            ${data.created_at
+              ? new Date(data.created_at).toLocaleDateString("ru-RU")
+              : "Неизвестно"}
+          </span>
+        </div>
+
+      </div>
+
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const closeModal = () => {
+    modal.remove();
+    document.removeEventListener("keydown", handleEscape);
+  };
+
+  const handleEscape = event => {
+    if (event.key === "Escape") {
+      closeModal();
+    }
+  };
+
+  modal.querySelector(".profile-modal-close").addEventListener("click", closeModal);
+
+  modal.addEventListener("click", event => {
+    if (event.target === modal) {
+      closeModal();
+    }
+  });
+
+  document.addEventListener("keydown", handleEscape);
+}
+
+// Единый обработчик для всех кнопок открытия профиля.
+
+document.addEventListener("click", event => {
+  const button = event.target.closest("[data-profile-open]");
+
+  if (!button) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const profileId = button.dataset.profileOpen;
+
+  if (profileId) {
+    openPublicProfile(profileId);
+  }
+});
+
+// =====================================
+// НАСТРОЙКИ
+// =====================================
+
+function fillSettings() {
+  if (!currentProfile) return;
+
+  if ($("editName")) {
+    $("editName").value = currentProfile.username || "";
+  }
+
+  if ($("editStatus")) {
+    $("editStatus").value = currentPresenceMode;
+  }
+
+  if ($("editBio")) {
+    $("editBio").value = currentProfile.bio || "";
+  }
+
+  if ($("accountStanding")) {
+    const level = currentProfile.reputation_level ?? 1;
+    const labels = { 1: "+1 · Хорошая репутация", 0: "0 · Ограниченный доступ", "-1": "-1 · Сильные ограничения", "-2": "-2 · Под угрозой", "-3": "-3 · Аккаунт приостановлен" };
+    $("accountStanding").textContent = (labels[level] || labels[1]) + ". Решения о доступе должны сопровождаться объяснением и возможностью апелляции.";
+    $("deactivateAccount")?.classList.toggle("hidden", currentProfile.account_state !== "active");
+    $("reactivateAccount")?.classList.toggle("hidden", currentProfile.account_state !== "deactivated");
+  }
+
+  if ($("phoneInput") && currentUser) {
+    supabase.from("profile_private").select("phone,phone_visible,birth_date,birth_date_visible,presence_mode").eq("user_id", currentUser.id).maybeSingle().then(({ data }) => {
+      if (!data) return;
+      currentPresenceMode = data.presence_mode || "online";
+      if ($("editStatus")) $("editStatus").value = currentPresenceMode;
+      $("phoneInput").value = data.phone || "";
+      $("phoneVisible").checked = data.phone_visible;
+      $("birthDateInput").value = data.birth_date || "";
+      $("birthDateVisible").checked = data.birth_date_visible;
+    });
+  }
+
+  if ($("themeSelect")) {
+    $("themeSelect").value =
+      localStorage.getItem("apple-theme") || "burgundy";
+  }
+}
+
+$("savePrivateProfile")?.addEventListener("click", async () => {
+  const { error } = await supabase.from("profile_private").upsert({
+    user_id: currentUser.id,
+    phone: $("phoneInput").value.trim() || null,
+    phone_visible: $("phoneVisible").checked,
+    birth_date: $("birthDateInput").value || null,
+    birth_date_visible: $("birthDateVisible").checked,
+    presence_mode: $("editStatus").value
+  });
+  $("accountSettingsMessage").textContent = error ? error.message : "Приватные данные сохранены.";
+});
+
+$("changeEmail")?.addEventListener("click", async () => {
+  const email = $("newEmail").value.trim();
+  if (!email) return;
+  const { error } = await supabase.auth.updateUser({ email });
+  $("accountSettingsMessage").textContent = error ? error.message : "Проверьте новую почту и подтвердите смену адреса.";
+});
+$("changePassword")?.addEventListener("click", async () => {
+  const password = $("newPassword").value;
+  if (password.length < 8) return say("Пароль должен содержать минимум 8 символов.", "accountSettingsMessage");
+  const { error } = await supabase.auth.updateUser({ password });
+  $("accountSettingsMessage").textContent = error ? error.message : "Пароль изменён.";
+});
+$("deactivateAccount")?.addEventListener("click", async () => {
+  if (!confirm("Временно отключить аккаунт? Вы сможете войти и включить его снова.")) return;
+  const { error } = await supabase.rpc("set_account_deactivated", { deactivate: true });
+  if (error) return say(error.message, "accountSettingsMessage");
+  await supabase.auth.signOut(); location.reload();
+});
+$("reactivateAccount")?.addEventListener("click", async () => {
+  const { error } = await supabase.rpc("set_account_deactivated", { deactivate: false });
+  if (error) return say(error.message, "accountSettingsMessage");
+  location.reload();
+});
+$("deleteAccount")?.addEventListener("click", async () => {
+  if (!confirm("Удалить аккаунт и связанные данные без возможности восстановления?")) return;
+  const { error } = await supabase.functions.invoke("delete-account", { body: { confirm: true } });
+  if (error) return say("Удаление не выполнено: " + error.message, "accountSettingsMessage");
+  await supabase.auth.signOut(); location.reload();
+});
+
+$("profileForm")?.addEventListener("submit", async event => {
+  event.preventDefault();
+
+  if (!currentUser) return;
+
+  const username = $("editName").value.trim();
+
+  if (username.length < 2) {
+    return say("Имя должно содержать минимум 2 символа.");
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      username,
+      bio: $("editBio").value.trim()
+    })
+    .eq("id", currentUser.id);
+
+  if (error) return say(error.code === "23505" ? "Такое имя пользователя уже занято." : error.message);
+
+  currentPresenceMode = $("editStatus").value;
+  const { error: presenceError } = await supabase.from("profile_private").upsert({ user_id: currentUser.id, presence_mode: currentPresenceMode });
+  if (presenceError) return say(presenceError.message);
+
+  const { data: updatedProfile, error: profileError } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", currentUser.id)
+    .single();
+
+  if (profileError) return say(profileError.message);
+
+  currentProfile = updatedProfile;
+
+  if ($("myName")) $("myName").textContent = currentProfile.username;
+
+  if ($("topUser")) {
+    $("topUser").textContent =
+      currentProfile.username + " · " + roleLabel(currentProfile.role);
+  }
+
+  renderProfile();
+
+  window.dispatchEvent(new CustomEvent("theapplebook:profile-updated"));
+
+  say("Профиль сохранён.");
+});
+
+$("saveTheme")?.addEventListener("click", () => {
+  const theme = $("themeSelect").value;
+
+  localStorage.setItem("apple-theme", theme);
+
+  document.body.classList.toggle("dark", theme === "dark");
+  document.body.dataset.theme = theme;
+
+  say("Тема сохранена.");
+});
+
+// =====================================
+// ОБНОВЛЕНИЕ АВАТАРКИ ПОСЛЕ ИЗМЕНЕНИЯ
+// =====================================
+
+window.addEventListener("theapplebook:profile-updated", async () => {
+  if (!currentUser) return;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", currentUser.id)
+    .single();
+
+  if (error || !data) return;
+
+  currentProfile = data;
+
+  if ($("myAvatar")) {
+    $("myAvatar").innerHTML = avatarContent(data);
+  }
+
+  if ($("myName")) {
+    $("myName").textContent = data.username;
+  }
+
+  if ($("myStatus")) {
+    $("myStatus").textContent = presenceLabel(currentPresenceMode);
+  }
+
+  renderProfile();
+
+  const activePage = document.querySelector(".page:not(.hidden)");
+
+  if (activePage?.id === "page-feed") await loadFeed();
+  if (activePage?.id === "page-friends") await loadFriends();
+  if (activePage?.id === "page-messages") await loadMessageContacts();
+});
+
+// =====================================
+// АДМИНИСТРИРОВАНИЕ
+// =====================================
+
+async function loadAdmin() {
+  if (!currentProfile || !$("adminContent")) return;
+
+  if (!["owner", "ceo", "deputy_ceo", "admin"].includes(currentProfile.role)) {
+    $("adminContent").textContent = "Недостаточно прав.";
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id,username,role,avatar_url,avatar_emoji,handle")
+    .order("username")
+    .limit(100);
+
+  if (error) return say(error.message);
+
+  const canManageTop = currentProfile.role === "owner";
+
+  $("adminContent").innerHTML = (data || []).map(person => {
+    const options = canManageTop
+      ? ["member", "moderator", "admin", "deputy_ceo", "ceo"]
+      : ["member", "moderator", "admin"];
+
+    const controls = person.role === "owner"
+      ? `<span class="pill">OWNER — защищён</span>`
+      : `
+        <select data-role-select="${esc(person.id)}">
+          ${options.map(role => `
+            <option value="${role}" ${role === person.role ? "selected" : ""}>
+              ${roleLabel(role)}
+            </option>
+          `).join("")}
+        </select>
+
+        <button class="secondary" data-role-save="${esc(person.id)}">
+          Сохранить
+        </button>
+      `;
+
+    return `
+      <div class="result-row">
+
+        <div class="person-main">
+          ${renderAvatarButton(person)}
+
+          <div class="user-info">
+            <button
+              type="button"
+              class="person-name-button"
+              data-profile-open="${esc(person.id)}"
+            >
+              ${esc(person.username)}
+            </button>
+
+            <small class="muted">${profileHandle(person)}</small>
+            <small class="muted">${esc(roleLabel(person.role))}</small>
+          </div>
+        </div>
+
+        <div>${controls}</div>
+
+      </div>
+    `;
+  }).join("");
+
+  document.querySelectorAll("[data-role-save]").forEach(button => {
+    button.addEventListener("click", async () => {
+      const id = button.dataset.roleSave;
+
+      const select = document.querySelector(
+        `[data-role-select="${id}"]`
+      );
+
+      if (!select) return;
+
+      const role = select.value;
+
+      const { error } = await supabase.rpc("admin_set_role", {
+        target_user_id: id,
+        new_role: role
+      });
+
+      if (error) return say(error.message);
+
+      say("Роль обновлена.");
+
+      await boot();
+      await loadAdmin();
+    });
+  });
+}
+
+// =====================================
+// ЗАПУСК
+// =====================================
+
+boot();
+
+// Private notes: database RLS restricts every row to its owner.
+async function loadNotes() {
+  if (!currentUser || !$("notesList")) return;
+  const { data, error } = await supabase.from("notes").select("id,body,updated_at").order("updated_at", { ascending: false });
+  if (error) return say("Не удалось загрузить Notes: " + error.message);
+  const list = $("notesList");
+  list.replaceChildren();
+  for (const note of data || []) {
+    const card = document.createElement("article");
+    card.className = "panel pad";
+    const body = document.createElement("p"); body.textContent = note.body;
+    const del = document.createElement("button"); del.type = "button"; del.textContent = "Удалить";
+    del.addEventListener("click", async () => {
+      const result = await supabase.from("notes").delete().eq("id", note.id);
+      if (result.error) return say(result.error.message);
+      await loadNotes();
+    });
+    card.append(body, del); list.append(card);
+  }
+}
+$("noteForm")?.addEventListener("submit", async event => {
+  event.preventDefault();
+  const body = $("noteBody").value.trim();
+  if (!body || !currentUser) return;
+  const { error } = await supabase.from("notes").insert({ owner_id: currentUser.id, body });
+  if (error) return say(error.message);
+  $("noteBody").value = ""; await loadNotes();
+});
+
+async function loadGiftShopOnce() {
+  const [{ data: wallet }, { data: gifts }, { data: history }] = await Promise.all([
+    supabase.from("wallets").select("balance").eq("user_id", currentUser.id).maybeSingle(),
+    supabase.from("gifts").select("id,name,rarity,price,emoji").order("price"),
+    supabase.from("token_transactions").select("amount,kind,created_at,details").order("created_at", { ascending: false }).limit(15)
+  ]);
+  $("walletBalance").textContent = "💰 " + (wallet?.balance ?? 0) + " токенов";
+  const catalog = $("giftCatalog"); catalog.replaceChildren();
+  for (const gift of gifts || []) {
+    const card = document.createElement("article"); card.className = "panel pad gift-card";
+    const title = document.createElement("h3"); title.textContent = gift.emoji + " " + gift.name;
+    const rarity = document.createElement("p"); rarity.textContent = gift.rarity + " · " + gift.price + " токенов";
+    const send = document.createElement("button"); send.type = "button"; send.textContent = "Подарить";
+    send.addEventListener("click", async () => {
+      const username = $("giftRecipient").value.trim();
+      if (!username) return $("giftMessage").textContent = "Введите имя получателя.";
+      const normalizedUsername = username.trim().replace(/\s+/g, " ").toLowerCase();
+      const { data: target, error: findError } = await supabase.from("profiles").select("id").eq("username_normalized", normalizedUsername).maybeSingle();
+      if (findError || !target) return $("giftMessage").textContent = "Пользователь не найден.";
+      const { error } = await supabase.rpc("send_gift", { target_user_id: target.id, selected_gift_id: gift.id });
+      $("giftMessage").textContent = error ? error.message : "Подарок отправлен!";
+      if (!error) await loadGiftShop();
+    });
+    card.append(title, rarity, send); catalog.append(card);
+  }
+  const log = $("tokenHistory"); log.replaceChildren();
+  for (const item of history || []) {
+    const row = document.createElement("p");
+    row.textContent = (item.amount > 0 ? "+" : "") + item.amount + " · " + item.kind + " · " + formatTime(item.created_at);
+    log.append(row);
+  }
+}
+
+async function loadGiftShop() {
+  if (!currentUser || !$("giftCatalog")) return;
+  if (!giftLoadPromise) {
+    giftLoadPromise = loadGiftShopOnce().finally(() => { giftLoadPromise = null; });
+  }
+  return giftLoadPromise;
+}
+$("claimDailyTokens")?.addEventListener("click", async () => {
+  const { data, error } = await supabase.rpc("claim_daily_tokens");
+  $("giftMessage").textContent = error ? error.message : "Ежедневные 250 токенов начислены.";
+  if (!error) await loadGiftShop();
+});
